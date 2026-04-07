@@ -12,3 +12,8 @@ profile.svg
 
 # Time trace
 trace.json
+
+*.bf
+
+.claude/
+.vscode/

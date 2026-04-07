@@ -1,0 +1,30 @@
+--!strict
+
+local Types = require('../shared/types')
+
+type ASTNode = Types.ASTNode
+
+export type CodegenState = {
+	variables: { [string]: number }, -- variable name -> cell index
+	nextVarCell: number, -- next cell to allocate for a variable
+	tempStart: number, -- first cell index reserved for temporaries
+	nextTemp: number, -- next temp cell to allocate
+	pointer: number, -- current BF tape pointer position
+	output: { string } -- accumulated BF code fragments
+}
+
+local State = {}
+
+function State.create(tempStart: number): CodegenState
+	return {
+		variables = {},
+		nextVarCell = 0,
+		tempStart = tempStart,
+		nextTemp = tempStart,
+		pointer = 0,
+		output = {}
+	}
+end
+
+
+return State
