@@ -49,7 +49,7 @@ The resulting `.bf` file runs on any standard Brainfuck interpreter:
 - Comparison operators: `==`, `~=`, `<`, `>`, `<=`, `>=`
 - Logical operators: `and`, `or`, `not`
 - Boolean literals: `true`, `false`
-- Control flow: `if` / `elseif` / `else`, `while`, numeric `for`
+- Control flow: `if` / `elseif` / `else`, `while`, numeric `for`, `repeat...until`
 - Output: `print(expr)`
 
 ## How It Works

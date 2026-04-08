@@ -33,7 +33,8 @@ Constants.NodeType = table.freeze({
 	Print = 'Print',
 	If = 'If',
 	While = 'While',
-	NumericFor = 'NumericFor'
+	NumericFor = 'NumericFor',
+	RepeatUntil = 'RepeatUntil'
 } :: { [string]: NodeType } )
 
 return Constants

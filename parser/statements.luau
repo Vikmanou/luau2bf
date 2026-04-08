@@ -120,6 +120,18 @@ local function parseFor(parserState: ParserState): ASTNode
 	})
 end
 
+local function parseRepeat(parserState: ParserState): ASTNode
+	local repeatTok = PState.advance(parserState)
+	local body = parseBlock(parserState, { 'until' })
+	PState.expect(parserState, TT.KEYWORD, 'until')
+
+	local condition = Expr.parseExpression(parserState)
+	return createNode(NT.RepeatUntil, repeatTok.line, {
+		body = body,
+		condition = condition,
+	})
+end
+
 local function parseAssignment(parserState: ParserState): ASTNode
     local nameTok = PState.expect(parserState, TT.IDENT)
     local opTok = PState.advance(parserState) -- Consume '=' or '+=' etc.
@@ -146,12 +158,13 @@ local function parseAssignment(parserState: ParserState): ASTNode
     error(`[Line {nameTok.line}] Unexpected assignment operator.`)
 end
 
-function parseStatement(parserState: ParserState): ASTNode?
+function parseStatement(parserState: ParserState): ASTNode
 	if PState.match(parserState, TT.KEYWORD, 'local') then return parseVarDecl(parserState) end
 	if PState.match(parserState, TT.KEYWORD, 'print') then return parsePrint(parserState) end
 	if PState.match(parserState, TT.KEYWORD, 'if') then return parseIf(parserState) end
 	if PState.match(parserState, TT.KEYWORD, 'while') then return parseWhile(parserState) end
 	if PState.match(parserState, TT.KEYWORD, 'for') then return parseFor(parserState) end
+	if PState.match(parserState, TT.KEYWORD, 'repeat') then return parseRepeat(parserState) end
 
 	if PState.current(parserState).type == TT.IDENT then return parseAssignment(parserState) end
 

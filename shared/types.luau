@@ -8,7 +8,7 @@ export type NodeType =
 	'Program' | 'NumberLit' | 'BoolLit' | 'VarRef' |
 	'UnaryOp' | 'BinOp' |
 	'VarDecl' | 'Assign' | 'Print' |
-	'If' | 'While' | 'NumericFor'
+	'If' | 'While' | 'NumericFor' | 'RepeatUntil'
 
 export type Token = {
 	type: TokenType,
