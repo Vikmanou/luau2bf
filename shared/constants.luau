@@ -13,6 +13,7 @@ Constants.TokenType = table.freeze({
 	IDENT = 'IDENT',
 	COMPARE = 'COMPARE',
 	ASSIGN = 'ASSIGN',
+	COMPOUND_ASSIGN = 'COMPOUND_ASSIGN',
 	OP = 'OP',
 	LPAREN = 'LPAREN',
 	RPAREN = 'RPAREN',

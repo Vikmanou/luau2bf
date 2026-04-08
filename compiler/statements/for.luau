@@ -13,53 +13,59 @@ type EmitBlock = (state: CodegenState, stmts: { ASTNode }) -> ()
 local NT = Constants.NodeType
 
 local function emitNumericFor(state: CodegenState, node: ASTNode, emitBlock: EmitBlock)
-    local iCell = Primitives.allocVar(state, node.name)
-    local stopName = `__stop__{node.name}`
-    local stopCell = Primitives.allocVar(state, stopName)
+	local iCell = Primitives.allocVar(state, node.name)
+	local stopName = `__stop__{node.name}`
+	local stopCell = Primitives.allocVar(state, stopName)
+	local stepName = `__step__{node.name}`
+	local stepCell = Primitives.allocVar(state, stepName)
 
-    -- Initialize i and stop
-    Primitives.withTempFloor(state, state.nextTemp, function()
-        local startVal = Expr.emitExpr(state, node.start)
-        Primitives.emitMoveAdd(state, startVal, iCell)
-        
-        local stopVal = Expr.emitExpr(state, node.stop)
-        Primitives.emitMoveAdd(state, stopVal, stopCell)
-    end)
+	-- Initialize i, stop, and step
+	Primitives.withTempFloor(state, state.nextTemp, function()
+		local startVal = Expr.emitExpr(state, node.start)
+		Primitives.emitMoveAdd(state, startVal, iCell)
 
-    -- Loop Condition Helper
-    local function emitCondition(): number
-        local condExpr: ASTNode = {
-            type = 'BinOp',
-            op = '<=',
-            left = { type = 'VarRef', name = node.name, line = node.line },
-            right = { type = 'VarRef', name = stopName, line = node.line }
-        }
-        return Expr.emitExpr(state, condExpr)
-    end
+		local stopVal = Expr.emitExpr(state, node.stop)
+		Primitives.emitMoveAdd(state, stopVal, stopCell)
 
-    -- Start Loop
-    local condCell = emitCondition()
-    Primitives.moveTo(state, condCell)
-    Primitives.emit(state, '[')
-    
-    -- Clear the condition cell inside the loop so it doesn't interfere with the next calculation
-    Primitives.emitZero(state, condCell) 
+		local stepExpr: ASTNode = node.step or { type = NT.NumberLit, value = 1 }
+		local stepVal = Expr.emitExpr(state, stepExpr)
+		Primitives.emitMoveAdd(state, stepVal, stepCell)
+	end)
 
-    emitBlock(state, node.body)
+	-- Loop condition: i <= stop
+	local function emitCondition(): number
+		local condExpr: ASTNode = {
+			type = 'BinOp',
+			op = '<=',
+			left = { type = 'VarRef', name = node.name, line = node.line },
+			right = { type = 'VarRef', name = stopName, line = node.line },
+		}
+		return Expr.emitExpr(state, condExpr)
+	end
 
-    Primitives.moveTo(state, iCell)
-    Primitives.emit(state, '+')
+	-- Start loop
+	local condCell = emitCondition()
+	Primitives.moveTo(state, condCell)
+	Primitives.emit(state, '[')
 
-    -- Re-evaluate condition to determine if we loop again
-    local nextCond = emitCondition()
-    
-    -- Move the new condition result back to the loop-control cell
-    Primitives.emitMoveAdd(state, nextCond, condCell)
-    
-    Primitives.moveTo(state, condCell)
-    Primitives.emit(state, ']')
-    
-    Primitives.resetTemps(state)
+	Primitives.emitZero(state, condCell)
+
+	emitBlock(state, node.body)
+
+	-- i += step (copy step into a temp, then add to iCell)
+	local copyTmp = Primitives.allocTemp(state)
+	local stepCopy = Primitives.allocTemp(state)
+	Primitives.emitCopy(state, stepCell, stepCopy, copyTmp)
+	Primitives.emitMoveAdd(state, stepCopy, iCell)
+
+	-- Re-evaluate condition
+	local nextCond = emitCondition()
+	Primitives.emitMoveAdd(state, nextCond, condCell)
+
+	Primitives.moveTo(state, condCell)
+	Primitives.emit(state, ']')
+
+	Primitives.resetTemps(state)
 end
 
 return {

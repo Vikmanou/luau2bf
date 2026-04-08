@@ -1,7 +1,7 @@
 --!strict
 
 export type TokenType =
-	'NUMBER' | 'KEYWORD' | 'IDENT' | 'COMPARE' | 'ASSIGN' |
+	'NUMBER' | 'KEYWORD' | 'IDENT' | 'COMPARE' | 'ASSIGN' | 'COMPOUND_ASSIGN' |
 	'OP' | 'LPAREN' | 'RPAREN' | 'COMMA' | 'EOF'
 
 export type NodeType =

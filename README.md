@@ -45,6 +45,7 @@ The resulting `.bf` file runs on any standard Brainfuck interpreter:
 
 - Variables
 - Arithmetic operators: `+`, `-`, `*`, `/`, `%`, unary `-`
+- Compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`
 - Comparison operators: `==`, `~=`, `<`, `>`, `<=`, `>=`
 - Logical operators: `and`, `or`, `not`
 - Boolean literals: `true`, `false`
@@ -77,17 +78,10 @@ Variables are allocated to consecutive cells starting at cell 0, in declaration 
 
 ## Running the tests (AI built this workflow)
 
+https://lute.luau.org/guide/writing-tests/
 ```sh
-lute test.luau
+lute test
 ```
-
-Each file under `tests/` declares its expected output on the first line:
-
-```lua
--- expected: 120\n
-```
-
-The runner compiles each file, executes the Brainfuck output through the built-in interpreter, and diffs the result.
 
 ## Limitations
 
@@ -96,7 +90,6 @@ The runner compiles each file, executes the Brainfuck output through the built-i
 - **No tables.** Table constructors, indexing, and `#` are not supported.
 - **No user-defined functions.** Closures and `return` are not supported.
 - **`print` takes one integer argument.** Multiple arguments are not supported.
-- **Numeric `for` always steps by 1.** A custom step expression is not supported.
 - **No standard library.** `math`, `string`, `table`, etc. are not available.
 
 ## Why?

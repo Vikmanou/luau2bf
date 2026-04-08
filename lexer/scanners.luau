@@ -66,6 +66,12 @@ function Scanners.scanTwoCharOp(s: LexerState): boolean
 			s.pos += 2
 			return true
 		end
+		
+		if two == '+=' or two == '-=' or two == '*=' or two == '/=' or two == '%=' then
+			LexState.addToken(s, TT.COMPOUND_ASSIGN, two:sub(1, 1))
+			s.pos += 2
+			return true
+		end
 	end
 	return false
 end
