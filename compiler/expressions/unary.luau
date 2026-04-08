@@ -25,15 +25,8 @@ local function emitNegate(state: CodegenState, exprCell: number): number
 end
 
 local function emitNot(state: CodegenState, exprCell: number): number
-	local result = Primitives.allocTemp(state)
-	Primitives.emitSetCell(state, result, 1)
-	Primitives.moveTo(state, exprCell)
-	Primitives.emit(state, '[')
-	Primitives.moveTo(state, result)
-	Primitives.emit(state, '[-]')
-	Primitives.moveTo(state, exprCell)
-	Primitives.emit(state, '[-]]')
-	Primitives.emitMoveAdd(state, result, exprCell)
+	local tmp = Primitives.allocTemp(state)
+	Primitives.emitBoolNot(state, exprCell, tmp)
 	state.nextTemp -= 1
 	return exprCell
 end

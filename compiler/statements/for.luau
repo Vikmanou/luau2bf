@@ -52,11 +52,9 @@ local function emitNumericFor(state: CodegenState, node: ASTNode, emitBlock: Emi
 
 	emitBlock(state, node.body)
 
-	-- i += step (copy step into a temp, then add to iCell)
-	local copyTmp = Primitives.allocTemp(state)
-	local stepCopy = Primitives.allocTemp(state)
-	Primitives.emitCopy(state, stepCell, stepCopy, copyTmp)
-	Primitives.emitMoveAdd(state, stepCopy, iCell)
+	-- i += step, preserving step for the next iteration
+	local tmp = Primitives.allocTemp(state)
+	Primitives.emitAddVar(state, iCell, stepCell, tmp)
 
 	-- Re-evaluate condition
 	local nextCond = emitCondition()

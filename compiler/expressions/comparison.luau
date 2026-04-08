@@ -84,38 +84,27 @@ local function emitLessThan(state: CodegenState, node: ASTNode, emitExpr: EmitEx
 	return leftCell
 end
 
--- Negate a boolean cell: 1->0, nonzero->0, 0->1
-local function emitBoolNegate(state: CodegenState, inner: number): number
-	local res = Primitives.allocTemp(state)
-	Primitives.emitSetCell(state, res, 1)
-	Primitives.moveTo(state, inner)
-	Primitives.emit(state, '[')
-	Primitives.moveTo(state, res)
-	Primitives.emit(state, '[-]')
-	Primitives.moveTo(state, inner)
-	Primitives.emit(state, '[-]]')
-	Primitives.emitMoveAdd(state, res, inner)
-	state.nextTemp = inner + 1
-	return inner
-end
-
 -- A > B  ≡  B < A
 local function emitGreaterThan(state: CodegenState, node: ASTNode, emitExpr: EmitExpr): number
 	return emitExpr(state, { type = 'BinOp', op = '<', left = node.right, right = node.left })
 end
 
-
 -- A <= B  ≡  NOT (B < A)
 local function emitLessOrEqual(state: CodegenState, node: ASTNode, emitExpr: EmitExpr): number
 	local inner = emitExpr(state, { type = 'BinOp', op = '<', left = node.right, right = node.left })
-	return emitBoolNegate(state, inner)
+	local tmp = Primitives.allocTemp(state)
+	Primitives.emitBoolNot(state, inner, tmp)
+	state.nextTemp = inner + 1
+	return inner
 end
-
 
 -- A >= B  ≡  NOT (A < B)
 local function emitGreaterOrEqual(state: CodegenState, node: ASTNode, emitExpr: EmitExpr): number
 	local inner = emitExpr(state, { type = 'BinOp', op = '<', left = node.left, right = node.right })
-	return emitBoolNegate(state, inner)
+	local tmp = Primitives.allocTemp(state)
+	Primitives.emitBoolNot(state, inner, tmp)
+	state.nextTemp = inner + 1
+	return inner
 end
 
 

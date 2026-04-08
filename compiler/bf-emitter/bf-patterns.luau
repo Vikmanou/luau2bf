@@ -56,6 +56,71 @@ function Cells.emitMoveSub(state: CodegenState, src: number, dst: number)
 	put(state, src, '-]')
 end
 
+-- x' = not x: result is 0 if x nonzero, 1 if x zero. Modifies cell in-place.
+-- Algorithm: https://esolangs.org/wiki/Brainfuck_algorithms
+-- tmp[-] cell[tmp+ cell[-]]+ tmp[cell- tmp-]
+function Cells.emitBoolNot(state: CodegenState, cell: number, tmp: number)
+	Cells.emitZero(state, tmp)
+
+	put(state, cell, '[')
+	put(state, tmp, '+')
+	put(state, cell, '[-]]+')
+	put(state, tmp, '[')
+	put(state, cell, '-')
+	put(state, tmp, '-]')
+end
+
+-- dst += src, src is preserved. Uses 1 temp.
+-- Algorithm: https://esolangs.org/wiki/Brainfuck_algorithms
+-- tmp[-] src[dst+ tmp+ src-] tmp[src+ tmp-]
+function Cells.emitAddVar(state: CodegenState, dst: number, src: number, tmp: number)
+	Cells.emitZero(state, tmp)
+
+	put(state, src, '[')
+	put(state, dst, '+')
+	put(state, tmp, '+')
+	put(state, src, '-]')
+	put(state, tmp, '[')
+	put(state, src, '+')
+	put(state, tmp, '-]')
+end
+
+-- dst -= src, src is preserved. Uses 1 temp.
+-- Algorithm: https://esolangs.org/wiki/Brainfuck_algorithms
+-- tmp[-] src[dst- tmp+ src-] tmp[src+ tmp-]
+function Cells.emitSubVar(state: CodegenState, dst: number, src: number, tmp: number)
+	Cells.emitZero(state, tmp)
+
+	put(state, src, '[')
+	put(state, dst, '-')
+	put(state, tmp, '+')
+	put(state, src, '-]')
+	put(state, tmp, '[')
+	put(state, src, '+')
+	put(state, tmp, '-]')
+end
+
+-- x = x * y, y is preserved. Uses 2 temps.
+-- Algorithm: https://esolangs.org/wiki/Brainfuck_algorithms
+-- tmp0[-] tmp1[-] x[tmp1+x-] tmp1[y[x+tmp0+y-]tmp0[y+tmp0-]tmp1-]
+function Cells.emitMulVar(state: CodegenState, x: number, y: number, tmp0: number, tmp1: number)
+	Cells.emitZero(state, tmp0)
+	Cells.emitZero(state, tmp1)
+	
+	put(state, x, '[')
+	put(state, tmp1, '+')
+	put(state, x, '-]')
+	put(state, tmp1, '[')
+	put(state, y, '[')
+	put(state, x, '+')
+	put(state, tmp0, '+')
+	put(state, y, '-]')
+	put(state, tmp0, '[')
+	put(state, y, '+')
+	put(state, tmp0, '-]')
+	put(state, tmp1, '-]')
+end
+
 function Cells.emitDivModVar(
     state: CodegenState,
     remainder: number,

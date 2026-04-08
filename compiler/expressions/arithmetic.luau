@@ -34,26 +34,12 @@ local function emitMul(state: CodegenState, node: ASTNode, emitExpr: EmitExpr): 
 	local right = emitExpr(state, node.right)
 
 	Primitives.withTempFloor(state, state.nextTemp, function()
-		local result = Primitives.allocTemp(state)
-		local tmp = Primitives.allocTemp(state)
-		local scratch = Primitives.allocTemp(state)
-
-		Primitives.emitZero(state, result)
-		
-		-- while left != 0: result += right
-		Primitives.moveTo(state, left)
-		Primitives.emit(state, '[')
-		Primitives.emitCopy(state, right, tmp, scratch)
-		Primitives.emitMoveAdd(state, tmp, result)
-		Primitives.moveTo(state, left)
-		Primitives.emit(state, '-]')
-
-		-- Move result back to the 'left' cell
-		Primitives.emitZero(state, left)
-		Primitives.emitMoveAdd(state, result, left)
+		local tmp0 = Primitives.allocTemp(state)
+		local tmp1 = Primitives.allocTemp(state)
+		Primitives.emitMulVar(state, left, right, tmp0, tmp1)
 	end)
 
-	state.nextTemp = right -- Free everything after 'left'
+	state.nextTemp = right
 	return left
 end
 

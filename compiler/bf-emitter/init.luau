@@ -15,5 +15,9 @@ return {
 	emitCopy = BfPatterns.emitCopy,
 	emitMoveAdd = BfPatterns.emitMoveAdd,
 	emitMoveSub = BfPatterns.emitMoveSub,
+	emitBoolNot = BfPatterns.emitBoolNot,
+	emitAddVar = BfPatterns.emitAddVar,
+	emitSubVar = BfPatterns.emitSubVar,
+	emitMulVar = BfPatterns.emitMulVar,
 	emitDivModVar = BfPatterns.emitDivModVar
 }
