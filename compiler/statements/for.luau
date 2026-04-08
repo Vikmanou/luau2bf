@@ -12,12 +12,30 @@ type EmitBlock = (state: CodegenState, stmts: { ASTNode }) -> ()
 
 local NT = Constants.NodeType
 
+local function isNegativeStep(stepExpr: ASTNode): boolean
+	if stepExpr.type == NT.NumberLit and (stepExpr.value :: number) < 0 then
+		return true
+	end
+    
+	if stepExpr.type == NT.UnaryOp and stepExpr.op == '-' then
+		local inner = stepExpr.expr :: ASTNode
+		if inner and inner.type == NT.NumberLit then
+			return true
+		end
+	end
+    
+	return false
+end
+
 local function emitNumericFor(state: CodegenState, node: ASTNode, emitBlock: EmitBlock)
 	local iCell = Primitives.allocVar(state, node.name)
 	local stopName = `__stop__{node.name}`
 	local stopCell = Primitives.allocVar(state, stopName)
 	local stepName = `__step__{node.name}`
 	local stepCell = Primitives.allocVar(state, stepName)
+
+	local stepExpr: ASTNode = node.step or { type = NT.NumberLit, value = 1 }
+	local negativeStep = isNegativeStep(stepExpr)
 
 	-- Initialize i, stop, and step
 	Primitives.withTempFloor(state, state.nextTemp, function()
@@ -27,16 +45,16 @@ local function emitNumericFor(state: CodegenState, node: ASTNode, emitBlock: Emi
 		local stopVal = Expr.emitExpr(state, node.stop)
 		Primitives.emitMoveAdd(state, stopVal, stopCell)
 
-		local stepExpr: ASTNode = node.step or { type = NT.NumberLit, value = 1 }
 		local stepVal = Expr.emitExpr(state, stepExpr)
 		Primitives.emitMoveAdd(state, stepVal, stepCell)
 	end)
 
-	-- Loop condition: i <= stop
+	-- Loop condition: i <= stop (positive step) or i >= stop (negative step)
+	local condOp = if negativeStep then '>=' else '<='
 	local function emitCondition(): number
 		local condExpr: ASTNode = {
 			type = 'BinOp',
-			op = '<=',
+			op = condOp,
 			left = { type = 'VarRef', name = node.name, line = node.line },
 			right = { type = 'VarRef', name = stopName, line = node.line },
 		}
