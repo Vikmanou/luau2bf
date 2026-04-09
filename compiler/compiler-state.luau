@@ -10,7 +10,8 @@ export type CodegenState = {
 	tempStart: number, -- first cell index reserved for temporaries
 	nextTemp: number, -- next temp cell to allocate
 	pointer: number, -- current BF tape pointer position
-	output: { string } -- accumulated BF code fragments
+	output: { string }, -- accumulated BF code fragments
+	breakStack: { number }, -- stack of break-flag cell indices for nested loops
 }
 
 local State = {}
@@ -22,7 +23,8 @@ function State.create(tempStart: number): CodegenState
 		tempStart = tempStart,
 		nextTemp = tempStart,
 		pointer = 0,
-		output = {}
+		output = {},
+		breakStack = {},
 	}
 end
 

@@ -34,7 +34,16 @@ Constants.NodeType = table.freeze({
 	If = 'If',
 	While = 'While',
 	NumericFor = 'NumericFor',
-	RepeatUntil = 'RepeatUntil'
+	RepeatUntil = 'RepeatUntil',
+	Break = 'Break'
 } :: { [string]: NodeType } )
+
+Constants.Flags = table.freeze({
+	REPEAT_FLAG = '__repeat_flag__',
+	BREAK_PREFIX = '__brk_',
+	BREAK_SUFFIX = '__',
+	FOR_STOP_PREFIX = '__stop__',
+	FOR_STEP_PREFIX = '__step__'
+})
 
 return Constants

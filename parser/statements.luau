@@ -165,6 +165,11 @@ function parseStatement(parserState: ParserState): ASTNode
 	if PState.match(parserState, TT.KEYWORD, 'while') then return parseWhile(parserState) end
 	if PState.match(parserState, TT.KEYWORD, 'for') then return parseFor(parserState) end
 	if PState.match(parserState, TT.KEYWORD, 'repeat') then return parseRepeat(parserState) end
+	
+	if PState.match(parserState, TT.KEYWORD, 'break') then
+		local tok = PState.advance(parserState)
+		return createNode(NT.Break, tok.line, {})
+	end
 
 	if PState.current(parserState).type == TT.IDENT then return parseAssignment(parserState) end
 

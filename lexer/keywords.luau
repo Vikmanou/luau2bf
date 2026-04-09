@@ -21,6 +21,7 @@ Keywords.KEYWORDS = {
 	['not'] = true,
 	['and'] = true,
 	['or'] = true,
+	['break'] = true,
 }
 
 Keywords.UNSUPPORTED_CHARS = {

@@ -11,6 +11,8 @@ type ASTNode = Types.ASTNode
 local State = require('./compiler-state')
 type CodegenState = State.CodegenState
 
+local Primitives = require('./bf-emitter')
+
 local emitStmt: (state: CodegenState, node: ASTNode) -> ()
 local emitBlock: (state: CodegenState, stmts: { ASTNode }) -> ()
 
@@ -47,7 +49,25 @@ end
 
 function emitBlock(state: CodegenState, stmts: { ASTNode })
 	for _, stmt in stmts do
-		emitStmt(state, stmt)
+		local brkCell = state.breakStack[#state.breakStack]
+		if brkCell ~= nil then
+			local savedTemp = state.nextTemp
+			local tmpDst = Primitives.allocTemp(state)
+			local tmpSrc = Primitives.allocTemp(state)
+			local floor = state.nextTemp
+			Primitives.emitCopy(state, brkCell, tmpDst, tmpSrc)
+			Primitives.moveTo(state, tmpDst)
+			Primitives.emit(state, '[-')
+			Primitives.withTempFloor(state, floor, function()
+				emitStmt(state, stmt)
+			end)
+			Primitives.moveTo(state, tmpDst)
+			Primitives.emit(state, ']')
+			
+			state.nextTemp = savedTemp
+		else
+			emitStmt(state, stmt)
+		end
 	end
 end
 

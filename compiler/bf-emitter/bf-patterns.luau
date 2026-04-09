@@ -21,8 +21,11 @@ end
 function Cells.emitSetCell(state: CodegenState, cell: number, value: number)
 	-- cell [ value ]: Set the cell to the specified value
 	Cells.emitZero(state, cell)
-	if value > 0 then
-		put(state, cell, string.rep('+', value % 256))
+	
+	if value > 255/2 then
+		put(state, cell, string.rep('-', 256 - value))
+	else
+		put(state, cell, string.rep('+', value))
 	end
 end
 

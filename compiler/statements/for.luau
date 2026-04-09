@@ -28,10 +28,15 @@ local function isNegativeStep(stepExpr: ASTNode): boolean
 end
 
 local function emitNumericFor(state: CodegenState, node: ASTNode, emitBlock: EmitBlock)
+	local brkName = `{Constants.Flags.BREAK_PREFIX}{node.line}{Constants.Flags.BREAK_SUFFIX}`
+	local brkCell = Primitives.allocVar(state, brkName)
+	Primitives.emitSetCell(state, brkCell, 1)
+	table.insert(state.breakStack, brkCell)
+
 	local iCell = Primitives.allocVar(state, node.name)
-	local stopName = `__stop__{node.name}`
+	local stopName = `{Constants.Flags.FOR_STOP_PREFIX}{node.name}`
 	local stopCell = Primitives.allocVar(state, stopName)
-	local stepName = `__step__{node.name}`
+	local stepName = `{Constants.Flags.FOR_STEP_PREFIX}{node.name}`
 	local stepCell = Primitives.allocVar(state, stepName)
 
 	local stepExpr: ASTNode = node.step or { type = NT.NumberLit, value = 1 }
@@ -70,18 +75,30 @@ local function emitNumericFor(state: CodegenState, node: ASTNode, emitBlock: Emi
 
 	emitBlock(state, node.body)
 
-	-- i += step, preserving step for the next iteration
-	local tmp = Primitives.allocTemp(state)
-	Primitives.emitAddVar(state, iCell, stepCell, tmp)
+	Primitives.resetTemps(state)
 
-	-- Re-evaluate condition
+	local stepTmp = Primitives.allocTemp(state)
+	Primitives.emitAddVar(state, iCell, stepCell, stepTmp) -- i += step; stepTmp zeroed after
+
 	local nextCond = emitCondition()
-	Primitives.emitMoveAdd(state, nextCond, condCell)
+
+	local tmp = Primitives.allocTemp(state)
+	local brkCopy = Primitives.allocTemp(state)
+	local brkScr = Primitives.allocTemp(state)
+	Primitives.emitMoveAdd(state, nextCond, tmp)
+	Primitives.emitCopy(state, brkCell, brkCopy, brkScr)
+	Primitives.moveTo(state, brkCopy)
+	Primitives.emit(state, '[-')
+	Primitives.emitMoveAdd(state, tmp, condCell)
+	Primitives.moveTo(state, brkCopy)
+	Primitives.emit(state, ']')
+	Primitives.emitZero(state, tmp)
 
 	Primitives.moveTo(state, condCell)
 	Primitives.emit(state, ']')
 
 	Primitives.resetTemps(state)
+	table.remove(state.breakStack)
 end
 
 return {
