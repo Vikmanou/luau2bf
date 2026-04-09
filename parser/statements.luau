@@ -23,15 +23,53 @@ local function createNode(nodeType: any, line: number, data: { [string]: any }):
     return node
 end
 
+local function parseIdentifierList(parserState: ParserState, firstToken: Types.Token?): { string }
+	local names = {}
+
+	if firstToken then
+		table.insert(names, firstToken.value)
+	else
+		table.insert(names, PState.expect(parserState, TT.IDENT).value)
+	end
+
+	while PState.match(parserState, TT.COMMA) do
+		PState.advance(parserState)
+		table.insert(names, PState.expect(parserState, TT.IDENT).value)
+	end
+
+	return names
+end
+
+local function parseExpressionList(parserState: ParserState): { ASTNode }
+	local exprs = { Expr.parseExpression(parserState) }
+
+	while PState.match(parserState, TT.COMMA) do
+		PState.advance(parserState)
+		table.insert(exprs, Expr.parseExpression(parserState))
+	end
+
+	return exprs
+end
+
+local function createAssignmentLikeNode(nodeType: any, line: number, names: { string }, exprs: { ASTNode }): ASTNode
+	if #names ~= #exprs then
+		error(`Error [line {line}]: Assignment count mismatch: got {#names} variable(s) and {#exprs} value(s)`)
+	end
+
+	return createNode(nodeType, line, {
+		name = names[1],
+		names = names,
+		expr = exprs[1],
+		exprs = exprs,
+	})
+end
+
 local function parseVarDecl(parserState: ParserState): ASTNode
 	local startTok = PState.advance(parserState)
-	local nameTok = PState.expect(parserState, TT.IDENT)
+	local names = parseIdentifierList(parserState)
 	PState.expect(parserState, TT.ASSIGN)
 
-	return createNode(NT.VarDecl, startTok.line, {
-        name = nameTok.value,
-        expr = Expr.parseExpression(parserState)
-    })
+	return createAssignmentLikeNode(NT.VarDecl, startTok.line, names, parseExpressionList(parserState))
 end
 
 local function parsePrint(parserState: ParserState): ASTNode
@@ -133,29 +171,30 @@ local function parseRepeat(parserState: ParserState): ASTNode
 end
 
 local function parseAssignment(parserState: ParserState): ASTNode
-    local nameTok = PState.expect(parserState, TT.IDENT)
-    local opTok = PState.advance(parserState) -- Consume '=' or '+=' etc.
+	local firstNameTok = PState.expect(parserState, TT.IDENT)
+	local names = parseIdentifierList(parserState, firstNameTok)
+	local operationToken = PState.advance(parserState)
 
-    if opTok.type == TT.ASSIGN then
-        return createNode(NT.Assign, nameTok.line, {
-            name = nameTok.value,
-            expr = Expr.parseExpression(parserState)
-        })
-    elseif opTok.type == TT.COMPOUND_ASSIGN then
-        local rhs = Expr.parseExpression(parserState)
-        local varRef = createNode(NT.VarRef, nameTok.line, { name = nameTok.value })
+	if #names > 1 and operationToken.type ~= TT.ASSIGN then
+		error(`Error [line {firstNameTok.line}]: Multiple assignment only supports '='`)
+	end
+
+	if operationToken.type == TT.ASSIGN then
+		return createAssignmentLikeNode(NT.Assign, firstNameTok.line, names, parseExpressionList(parserState))
+	elseif operationToken.type == TT.COMPOUND_ASSIGN then
+		local rhs = Expr.parseExpression(parserState)
+		local varRef = createNode(NT.VarRef, firstNameTok.line, { name = firstNameTok.value })
         
-        return createNode(NT.Assign, nameTok.line, {
-            name = nameTok.value,
-            expr = createNode(NT.BinOp, nameTok.line, {
-                op = opTok.value,
-                left = varRef,
-                right = rhs
-            })
-        })
-    end
+		return createAssignmentLikeNode(NT.Assign, firstNameTok.line, names, {
+			createNode(NT.BinOp, firstNameTok.line, {
+				op = operationToken.value,
+				left = varRef,
+				right = rhs
+			})
+		})
+	end
 
-    error(`[Line {nameTok.line}] Unexpected assignment operator.`)
+	error(`[Line {firstNameTok.line}] Unexpected assignment operator.`)
 end
 
 function parseStatement(parserState: ParserState): ASTNode
@@ -167,24 +206,25 @@ function parseStatement(parserState: ParserState): ASTNode
 	if PState.match(parserState, TT.KEYWORD, 'repeat') then return parseRepeat(parserState) end
 	
 	if PState.match(parserState, TT.KEYWORD, 'break') then
-		local tok = PState.advance(parserState)
-		return createNode(NT.Break, tok.line, {})
+		local token = PState.advance(parserState)
+		return createNode(NT.Break, token.line, {})
 	end
 
 	if PState.current(parserState).type == TT.IDENT then return parseAssignment(parserState) end
 
-	error(`Error [line {PState.current(parserState).line}]: Unexpected token '{PState.current(parserState).value}'`)
+	local currentToken = PState.current(parserState)
+	error(`Error [line {currentToken.line}]: Unexpected token '{currentToken.value}'`)
 end
 
 function parseBlock(parserState: ParserState, terminators: { string }): { ASTNode }
     local stmts = {}
     
     while true do
-        local tok = PState.current(parserState)
-        if tok.type == TT.EOF then break end
+        local currentToken = PState.current(parserState)
+        if currentToken.type == TT.EOF then break end
         
         -- Check if current token is a terminator
-        if tok.type == TT.KEYWORD and table.find(terminators, tok.value) then
+        if currentToken.type == TT.KEYWORD and table.find(terminators, currentToken.value) then
             break
         end
 

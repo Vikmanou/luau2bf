@@ -29,7 +29,7 @@ local function loadHandlers()
 		if entry.type ~= 'file' or not entry.name:find('%.luau$') or entry.name == 'init.luau' then continue end
 
 		local name = entry.name:gsub('%.luau$', '')
-		local module = require(`./statements/{name}`)
+		local module = (require)(`./statements/{name}`)
 		for nodeType, handler in module do
 			handlers[nodeType] = handler
 		end

@@ -21,7 +21,7 @@ local countFuncs = {
 	end,
 
 	['VarDecl'] = function(node: ASTNode): number
-		return 1
+		return if node.names then #node.names else 1
 	end,
 
 	['If'] = function(node: ASTNode): number

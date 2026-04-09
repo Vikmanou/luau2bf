@@ -10,6 +10,7 @@ return {
 	resetTemps = Tape.resetTemps,
 	withTempFloor = Tape.withTempFloor,
 	allocVar = Tape.allocVar,
+
 	emitZero = BfPatterns.emitZero,
 	emitSetCell = BfPatterns.emitSetCell,
 	emitCopy = BfPatterns.emitCopy,
@@ -19,5 +20,5 @@ return {
 	emitAddVar = BfPatterns.emitAddVar,
 	emitSubVar = BfPatterns.emitSubVar,
 	emitMulVar = BfPatterns.emitMulVar,
-	emitDivModVar = BfPatterns.emitDivModVar
+	emitDivModVar = BfPatterns.emitDivModVar,
 }
