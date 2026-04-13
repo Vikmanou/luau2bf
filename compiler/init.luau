@@ -1,28 +1,17 @@
 --!strict
--- Implementation is split across this directory's submodules:
---   compiler-state.luau - CodegenState type and tape-layout helpers
---   bf-emitter/  - Low-level BF emit helpers
---   expressions/ - Expression codegen
---   statements/  - Statement and block codegen
 
 local State = require('./compiler/compiler-state')
-local Stmts = require('./compiler/statements')
+local Statements = require('./compiler/statements')
 local CountVars = require('./compiler/count-variables')
-
-local Types = require('./shared/types')
-type ASTNode = Types.ASTNode
 
 local Codegen = {}
 
-function Codegen.generate(ast: ASTNode): string
-	assert(ast.type == 'Program', 'Expected Program node')
+function Codegen.generate(root): string
+	local varCount = CountVars(root)
+	-- +4: for loop allocates step and break cells beyond the declared variable count
+	local state = State.create(varCount + 4)
 
-	-- Reserve enough cells for all declared variables
-	local varCount = CountVars(ast)
-	local tempStart = varCount + 4 -- small buffer for safety
-	local state = State.create(tempStart)
-
-	Stmts.emitBlock(state, ast.body)
+	Statements.emitBlock(state, root.statements)
 
 	return table.concat(state.output)
 end

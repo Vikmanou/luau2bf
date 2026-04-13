@@ -1,45 +1,37 @@
 --!strict
--- Unary operator codegen: negation (-) and logical not.
-
-local Types = require('../../shared/types')
-type ASTNode = Types.ASTNode
 
 local State = require('../compiler-state')
 type CodegenState = State.CodegenState
+type Node = { [string]: any }
+type EmitExpr = (state: CodegenState, node: Node) -> number
 
 local Primitives = require('../bf-emitter')
-local Constants = require('../../shared/constants')
 
-local NT = Constants.NodeType
-
-type EmitExpr = (state: CodegenState, node: ASTNode) -> number
-
-local function emitNegate(state: CodegenState, exprCell: number): number
+local function emitNegate(state: CodegenState, cell: number): number
 	local result = Primitives.allocTemp(state)
 	Primitives.emitZero(state, result)
-	Primitives.emitMoveSub(state, exprCell, result)
-	Primitives.emitZero(state, exprCell)
-	Primitives.emitMoveAdd(state, result, exprCell)
+	Primitives.emitMoveSub(state, cell, result)
+	Primitives.emitZero(state, cell)
+	Primitives.emitMoveAdd(state, result, cell)
 	state.nextTemp -= 1
-	return exprCell
+	return cell
 end
 
-local function emitNot(state: CodegenState, exprCell: number): number
+local function emitNot(state: CodegenState, cell: number): number
 	local tmp = Primitives.allocTemp(state)
-	Primitives.emitBoolNot(state, exprCell, tmp)
+	Primitives.emitBoolNot(state, cell, tmp)
 	state.nextTemp -= 1
-	return exprCell
+	return cell
 end
 
-local function emitUnary(state: CodegenState, node: ASTNode, emitExpr: EmitExpr): number
-	local exprCell = emitExpr(state, node.expr)
-
-	if node.op == '-' then return emitNegate(state, exprCell) end
-	if node.op == 'not' then return emitNot(state, exprCell) end
-
-	error(`Error [line {tostring(node.line)}]: Unknown unary operator '{tostring(node.op)}'`)
+local function emitUnary(state: CodegenState, node: Node, emitExpr: EmitExpr): number
+	local op = node.operator.text
+	local cell = emitExpr(state, node.operand)
+	if op == '-' then return emitNegate(state, cell) end
+	if op == 'not' then return emitNot(state, cell)    end
+	error(`Error [line {node.location.beginLine}]: Unknown unary operator '{op}'`)
 end
 
 return {
-	[NT.UnaryOp] = emitUnary,
+	['unary'] = emitUnary,
 }

@@ -54,23 +54,25 @@ The resulting `.bf` file runs on any standard Brainfuck interpreter:
 
 ## How It Works
 
-The compiler runs in three phases:
+The compiler runs in two phases:
 
 ```
 Luau source
     │
-    ▼  lexer/
-Tokenize        Scans characters into a flat token stream
+    ▼  @std/syntax  (Lute built-in parser)
+Parse           Builds a typed AST from Luau source
     │
-    ▼  parser/
-Parse           Builds an Abstract Syntax Tree (AST) from the token stream
-    │
-    ▼  codegen/
-Generate        Walks the AST and emits Brainfuck instructions
+    ▼  compiler/
+Generate        Walks the AST, folds constants inline, emits Brainfuck
     │
     ▼
 Brainfuck
 ```
+
+Parsing is handled by Lute's `@std/syntax` standard library — there is no custom lexer or parser in this project.
+
+**Constant folding** happens inline during code generation. Expressions where both operands are numeric literals are evaluated at compile time (`3 + 2` → `5`).
+Identity rules are also applied (`n * 1` → `n`, `0 * n` → `0`, etc.).
 
 ### Tape layout
 
@@ -99,5 +101,4 @@ I started this project around 3 years ago for a fun challenge on [codeguessing](
 ## AI usage
 
 - Generation of test cases in `tests/`.
-- Statements and expressions in `codegen/stmts/` and `codegen/exprs/`.
 - GitHub Copilot inline suggestions.

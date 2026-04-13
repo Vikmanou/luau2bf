@@ -1,72 +1,107 @@
 --!strict
 -- Variable declaration and assignment codegen.
 
-local Types = require('../../shared/types')
-type ASTNode = Types.ASTNode
-
 local State = require('../compiler-state')
 type CodegenState = State.CodegenState
+type Node = { [string]: any }
+type EmitBlock = (state: CodegenState, stmts: { Node }) -> ()
 
 local Primitives = require('../bf-emitter')
-
 local Expr = require('../expressions')
-local Constants = require('../../shared/constants')
 
-local NT = Constants.NodeType
-
-local function getNames(node: ASTNode): { string }
-	return node.names or { node.name }
-end
-
-local function getExprs(node: ASTNode): { ASTNode }
-	return node.exprs or { node.expr }
-end
-
-local function evaluateExprs(state: CodegenState, exprs: { ASTNode }): { number }
-	local exprCells = {}
-
-	for _, expr in exprs do
-		table.insert(exprCells, Expr.emitExpr(state, expr))
+-- Extract values from a Punctuated<T> (array of { node: T, separator: ...? })
+local function unpack(p: { any }): { Node }
+	local out = {}
+	for _, pair in p do
+		table.insert(out, pair.node)
 	end
-
-	return exprCells
+	return out
 end
 
-local function moveExprsToCells(state: CodegenState, targetCells: { number }, exprCells: { number })
-	for index, cell in targetCells do
+local function evaluateExprs(state: CodegenState, exprs: { Node }): { number }
+	local cells = {}
+	for _, expr in exprs do
+		table.insert(cells, Expr.emitExpr(state, expr))
+	end
+	return cells
+end
+
+local function moveExprsToCells(state: CodegenState, targets: { number }, sources: { number })
+	for i, cell in targets do
 		Primitives.emitZero(state, cell)
-		Primitives.emitMoveAdd(state, exprCells[index], cell)
+		Primitives.emitMoveAdd(state, sources[i], cell)
 	end
 
 	Primitives.resetTemps(state)
 end
 
-local function emitVarDecl(state: CodegenState, node: ASTNode)
-	local targetCells = {}
-
-	for _, name in getNames(node) do
-		table.insert(targetCells, Primitives.allocVar(state, name))
+-- AstStatLocal: local x, y = expr1, expr2
+local function emitVarDecl(state: CodegenState, node: Node, _: EmitBlock)
+	local vars = unpack(node.variables)
+	local values = unpack(node.values)
+	local targets = {}
+	for _, astLocal in vars do
+		table.insert(targets, Primitives.allocVar(state, astLocal.name.text))
 	end
 
-	moveExprsToCells(state, targetCells, evaluateExprs(state, getExprs(node)))
+	moveExprsToCells(state, targets, evaluateExprs(state, values))
 end
 
-local function emitAssign(state: CodegenState, node: ASTNode)
-	local targetCells = {}
-
-	for _, name in getNames(node) do
-		local cell = state.variables[name]
-		if cell == nil then
-			error(`Error [line {node.line or 0}]: Undefined variable '{name}'`)
+-- AstStatAssign: x, y = expr1, expr2
+local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
+	local lhsExprs = unpack(node.variables)
+	local values = unpack(node.values)
+	local targets = {}
+	for _, lhs in lhsExprs do
+		local lhsNode = lhs :: Node
+		if lhsNode.tag ~= 'local' then
+			error(`Error [line {node.location.beginLine}]: Only local variable assignment is supported`)
 		end
-
-		table.insert(targetCells, cell)
+		local varName: string = (lhsNode["local"] :: any).name.text
+		local cell = state.variables[varName]
+		if cell == nil then
+			error(`Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
+		end
+		table.insert(targets, cell)
 	end
 
-	moveExprsToCells(state, targetCells, evaluateExprs(state, getExprs(node)))
+	moveExprsToCells(state, targets, evaluateExprs(state, values))
+end
+
+-- AstStatCompoundAssign: x += expr  →  x = x OP expr
+local function emitCompoundAssign(state: CodegenState, node: Node, _: EmitBlock)
+	local lhs = node.variable :: Node
+	if lhs.tag ~= 'local' then
+		error(`Error [line {node.location.beginLine}]: Only local variable compound assignment is supported`)
+	end
+
+	local varName: string = lhs["local"].name.text
+	local cell = state.variables[varName]
+	if cell == nil then
+		error(`Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
+	end
+
+	-- Strip trailing '=' to get the base operator ("+=" → "+")
+	local compoundOp: string = (node.operand :: any).text
+	local baseOp = compoundOp:sub(1, -2)
+
+	-- Synthesise: varName = varName OP rhs
+	local rhs = node.value :: Node
+	-- Build a synthetic binary node (plain table — no Lute AST needed here)
+	local synthetic: Node = {
+		tag = 'binary',
+		operator = { text = baseOp },
+		lhsOperand = node.variable,
+		rhsOperand = rhs,
+	}
+	local resultCell = Expr.emitExpr(state, synthetic)
+	Primitives.emitZero(state, cell)
+	Primitives.emitMoveAdd(state, resultCell, cell)
+	Primitives.resetTemps(state)
 end
 
 return {
-	[NT.VarDecl] = emitVarDecl,
-	[NT.Assign] = emitAssign
+	['local'] = emitVarDecl,
+	['assign'] = emitAssign,
+	['compoundassign'] = emitCompoundAssign,
 }

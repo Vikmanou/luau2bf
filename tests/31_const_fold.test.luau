@@ -1,76 +1,82 @@
 --!strict
 
 local test = require('@std/test')
-local Lexer = require('../lexer')
-local Parser = require('../parser')
-local Fold = require('../optimizer/fold')
+local Compiler = require('../pipeline')
+local BFInterp = require('../bf-interpreter')
 
-local function foldExpr(source: string)
-	local tokens = Lexer.tokenize(source)
-	local ast = Parser.parse(tokens)
-	local folded = Fold.fold(ast)
-	return folded.body
+local function run(source: string): string
+	return BFInterp.run(Compiler.compile(source))
 end
 
-test.case('fold: BinOp number literals collapse to NumberLit', function(asserts)
-	local stmt = foldExpr('print(3 + 2)')[1]
-
-	-- Should be NumberLit(5), not a BinOp
-	asserts.eq('NumberLit', stmt.expr.type)
-	asserts.eq(5, stmt.expr.value)
+test.case('fold: 3 + 2 = 5', function(asserts)
+	asserts.eq('5\n', run('print(3 + 2)'))
 end)
 
-test.case('fold: nested arithmetic fully collapses', function(asserts)
-	local stmt = foldExpr('print(2 * 3 + 4)')[1]
-
-	asserts.eq('NumberLit', stmt.expr.type)
-	asserts.eq(10, stmt.expr.value)
+test.case('fold: 10 - 4 = 6', function(asserts)
+	asserts.eq('6\n', run('print(10 - 4)'))
 end)
 
-test.case('fold: subtraction with variable stays BinOp', function(asserts)
-	local stmt = foldExpr('local x = 5\nprint(x - 1)')[2]
-
-	asserts.eq('BinOp', stmt.expr.type)
+test.case('fold: 3 * 4 = 12', function(asserts)
+	asserts.eq('12\n', run('print(3 * 4)'))
 end)
 
-test.case('fold: n * 1 identity reduces to VarRef', function(asserts)
-	local stmt = foldExpr('local x = 7\nprint(x * 1)')[2]
-
-	-- x * 1 should fold to just x (a VarRef)
-	asserts.eq('VarRef', stmt.expr.type)
+test.case('fold: 20 / 4 = 5', function(asserts)
+	asserts.eq('5\n', run('print(20 / 4)'))
 end)
 
-test.case('fold: 0 * n identity reduces to NumberLit(0)', function(asserts)
-	local stmt = foldExpr('local x = 99\nprint(0 * x)')[2]
-
-	asserts.eq('NumberLit', stmt.expr.type)
-	asserts.eq(0, stmt.expr.value)
+test.case('fold: 17 % 5 = 2', function(asserts)
+	asserts.eq('2\n', run('print(17 % 5)'))
 end)
 
-test.case('fold: n + 0 identity reduces to VarRef', function(asserts)
-	local stmt = foldExpr('local x = 4\nprint(x + 0)')[2]
-
-	asserts.eq('VarRef', stmt.expr.type)
+test.case('fold identity: n * 1 = n', function(asserts)
+	asserts.eq('7\n', run([[
+local n = 7
+print(n * 1)
+]]))
 end)
 
-test.case('fold: comparison of literals collapses to BoolLit', function(asserts)
-	local stmt = foldExpr('print(3 > 2)')[1]
-
-	asserts.eq('BoolLit', stmt.expr.type)
-	asserts.eq(true, stmt.expr.value)
+test.case('fold identity: 1 * n = n', function(asserts)
+	asserts.eq('7\n', run([[
+local n = 7
+print(1 * n)
+]]))
 end)
 
-test.case('fold: not true collapses to BoolLit(false)', function(asserts)
-	local stmt = foldExpr('print(not true)')[1]
-
-	asserts.eq('BoolLit', stmt.expr.type)
-	asserts.eq(false, stmt.expr.value)
+test.case('fold identity: n + 0 = n', function(asserts)
+	asserts.eq('9\n', run([[
+local n = 9
+print(n + 0)
+]]))
 end)
 
-test.case('fold: VarDecl rhs is folded', function(asserts)
-	local stmt = foldExpr('local x = 10 - 4')[1]
-	
-	-- x's initialiser should be NumberLit(6)
-	asserts.eq('NumberLit', stmt.expr.type)
-	asserts.eq(6, stmt.expr.value)
+test.case('fold identity: n - 0 = n', function(asserts)
+	asserts.eq('9\n', run([[
+local n = 9
+print(n - 0)
+]]))
+end)
+
+test.case('fold identity: n / 1 = n', function(asserts)
+	asserts.eq('6\n', run([[
+local n = 6
+print(n / 1)
+]]))
+end)
+
+test.case('fold zero: 0 * n = 0', function(asserts)
+	asserts.eq('0\n', run([[
+local n = 42
+print(0 * n)
+]]))
+end)
+
+test.case('fold zero: n * 0 = 0', function(asserts)
+	asserts.eq('0\n', run([[
+local n = 42
+print(n * 0)
+]]))
+end)
+
+test.case('fold nested: (2 + 3) * 4 = 20', function(asserts)
+	asserts.eq('20\n', run('print((2 + 3) * 4)'))
 end)

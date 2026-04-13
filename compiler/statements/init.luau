@@ -1,22 +1,20 @@
 --!strict
--- Statement and block code generation - main dispatch.
--- Each submodule in the stmts/ folder returns { [NodeType] = handler }.
--- To add a new statement: create the file - no other wiring needed.
+-- Statement and block code generation dispatcher.
+-- Each submodule returns { [tag] = handler }.
+-- To add support for a new statement: create the file, no other wiring needed.
 
 local fs = require('@lute/fs')
 
-local Types = require('../shared/types')
-type ASTNode = Types.ASTNode
-
 local State = require('./compiler-state')
 type CodegenState = State.CodegenState
+type Node = { [string]: any }
 
 local Primitives = require('./bf-emitter')
 
-local emitStmt: (state: CodegenState, node: ASTNode) -> ()
-local emitBlock: (state: CodegenState, stmts: { ASTNode }) -> ()
+local emitStmt:  (state: CodegenState, node: Node) -> ()
+local emitBlock: (state: CodegenState, stmts: { Node }) -> ()
 
-local handlers: { [string]: (state: CodegenState, node: ASTNode, emitBlock: typeof(emitBlock)) -> () } = {}
+local handlers: { [string]: (state: CodegenState, node: Node, emitBlock: typeof(emitBlock)) -> () } = {}
 local handlersReady = false
 
 local function loadHandlers()
@@ -24,30 +22,28 @@ local function loadHandlers()
 	handlersReady = true
 
 	local entries = fs.listdir('./compiler/statements')
-
 	for _, entry in entries do
 		if entry.type ~= 'file' or not entry.name:find('%.luau$') or entry.name == 'init.luau' then continue end
-
 		local name = entry.name:gsub('%.luau$', '')
 		local module = (require)(`./statements/{name}`)
-		for nodeType, handler in module do
-			handlers[nodeType] = handler
+		for tag, handler in module do
+			handlers[tag] = handler
 		end
 	end
 end
 
-function emitStmt(state: CodegenState, node: ASTNode)
+function emitStmt(state: CodegenState, node: Node)
 	loadHandlers()
 
-	local handler = handlers[node.type]
+	local handler = handlers[node.tag]
 	if not handler then
-		error(`Error: Unknown statement type '{tostring(node.type)}'`)
+		error(`Error: Unsupported statement '{node.tag}'`)
 	end
-	
+
 	handler(state, node, emitBlock)
 end
 
-function emitBlock(state: CodegenState, stmts: { ASTNode })
+function emitBlock(state: CodegenState, stmts: { Node })
 	for _, stmt in stmts do
 		local brkCell = state.breakStack[#state.breakStack]
 		if brkCell ~= nil then
@@ -63,7 +59,6 @@ function emitBlock(state: CodegenState, stmts: { ASTNode })
 			end)
 			Primitives.moveTo(state, tmpDst)
 			Primitives.emit(state, ']')
-			
 			state.nextTemp = savedTemp
 		else
 			emitStmt(state, stmt)

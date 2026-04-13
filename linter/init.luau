@@ -12,13 +12,13 @@ function Linter.validate(source: string): ()
 	
 	for _, v in res do
 		if v.severity == 1 then
-			error(`Lint Error: ${v.message} at line ${v.range.start.line}`)
+			error(`Lint Error: {v.message} at line {v.range.start.line}`)
 			return
 		end
 	end
 
 	if result.ok == false then
-		error(`Lint Error: ${result.stderr}`)
+		error(`Lint Error: {result.stderr}`)
 		return
 	end
 end

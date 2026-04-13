@@ -167,4 +167,54 @@ function Cells.emitDivModVar(
     Cells.emitMoveAdd(state, counter, remainder)
 end
 
+-- result = left < right (1 or 0). Consumes both cells, result stored in leftCell.
+function Cells.emitLessThanCells(state: CodegenState, leftCell: number, rightCell: number): number
+	local leftCopy = Tape.allocTemp(state)
+	local copyTmp = Tape.allocTemp(state)
+	local leftTmp = Tape.allocTemp(state)
+	local flag = Tape.allocTemp(state)
+
+	Cells.emitCopy(state, leftCell, leftCopy, copyTmp)
+	Cells.emitSetCell(state, leftCell, 0)
+
+	put(state, rightCell, '[')
+
+	Cells.emitCopy(state, leftCopy, leftTmp, copyTmp)
+	Cells.emitSetCell(state, flag, 1)
+
+	put(state, leftTmp, '[')
+	Cells.emitZero(state, flag)
+	put(state, leftCopy, '-')
+	Cells.emitZero(state, leftTmp)
+	put(state, leftTmp, ']')
+
+	put(state, flag, '[')
+	Cells.emitSetCell(state, leftCell, 1)
+	put(state, flag, '[-]]')
+
+	put(state, rightCell, '-]')
+	Cells.emitZero(state, leftCopy)
+
+	state.nextTemp = leftCell + 1
+	return leftCell
+end
+
+-- result = left <= right.  Result in rightCell (= NOT(right < left)).
+function Cells.emitLessOrEqualCells(state: CodegenState, leftCell: number, rightCell: number): number
+	Cells.emitLessThanCells(state, rightCell, leftCell) -- result of (right < left) in rightCell
+	local tmp = Tape.allocTemp(state)
+	Cells.emitBoolNot(state, rightCell, tmp)
+	state.nextTemp = rightCell + 1
+	return rightCell
+end
+
+-- result = left >= right.  Result in leftCell (= NOT(left < right)).
+function Cells.emitGreaterOrEqualCells(state: CodegenState, leftCell: number, rightCell: number): number
+	Cells.emitLessThanCells(state, leftCell, rightCell) -- result of (left < right) in leftCell
+	local tmp = Tape.allocTemp(state)
+	Cells.emitBoolNot(state, leftCell, tmp)
+	state.nextTemp = leftCell + 1
+	return leftCell
+end
+
 return Cells

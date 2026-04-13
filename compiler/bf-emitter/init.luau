@@ -21,4 +21,7 @@ return {
 	emitSubVar = BfPatterns.emitSubVar,
 	emitMulVar = BfPatterns.emitMulVar,
 	emitDivModVar = BfPatterns.emitDivModVar,
+	emitLessThanCells = BfPatterns.emitLessThanCells,
+	emitLessOrEqualCells = BfPatterns.emitLessOrEqualCells,
+	emitGreaterOrEqualCells = BfPatterns.emitGreaterOrEqualCells,
 }

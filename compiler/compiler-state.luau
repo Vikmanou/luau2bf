@@ -1,9 +1,5 @@
 --!strict
 
-local Types = require('../shared/types')
-
-type ASTNode = Types.ASTNode
-
 export type CodegenState = {
 	variables: { [string]: number }, -- variable name -> cell index
 	nextVarCell: number, -- next cell to allocate for a variable

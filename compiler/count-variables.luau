@@ -1,64 +1,28 @@
 --!strict
--- Counts all variable declarations
 
-local Types = require('../shared/types')
+local visitor = require('@std/syntax/visitor')
 
-type ASTNode = Types.ASTNode
+type AstStatBlock = { statements: { any }, [string]: any }
+type AstStatLocal = { variables: { any }, [string]: any }
+type AstStatFor = { [string]: any }
 
-local countVars: (node: ASTNode) -> number
+local function countVars(root: AstStatBlock): number
+	local count = 0
 
-local function countBody(nodes: { ASTNode }): number
-	local sum = 0
-	for _, stmt in nodes do
-		sum += countVars(stmt)
+	local nodeVisitor = visitor.create()
+
+	nodeVisitor.visitStatLocalDeclaration = function(node: any): boolean
+		count += #node.variables
+		return true
 	end
-	return sum
-end
 
-local countFuncs = {
-	['Program'] = function(node: ASTNode): number
-		return countBody(node.body)
-	end,
-
-	['VarDecl'] = function(node: ASTNode): number
-		return if node.names then #node.names else 1
-	end,
-
-	['If'] = function(node: ASTNode): number
-		local count = countBody(node.body)
-
-		if node.elseifClauses then
-			for _, clause in node.elseifClauses do
-				count += countBody(clause.body)
-			end
-		end
-		
-		if node.elseBody then
-			count += countBody(node.elseBody)
-		end
-
-		return count
-	end,
-
-	['While'] = function(node: ASTNode): number
-		return countBody(node.body)
-	end,
-
-	['NumericFor'] = function(node: ASTNode): number
-		local count = 2 -- loop variable + stop cell
-		count += countBody(node.body)
-		return count
-	end,
-
-	['Print'] = function(node: ASTNode): number
-		return 0
+	nodeVisitor.visitStatFor = function(_node: any): boolean
+		count += 2  -- loop variable + stop cell (step and brk are covered by the +4 buffer)
+		return true
 	end
-}
 
-
-countVars = function(node: ASTNode): number
-	local func = countFuncs[node.type]
-	return func and func(node) or 0
+	visitor.visitBlock(root, nodeVisitor)
+	return count
 end
 
 return countVars

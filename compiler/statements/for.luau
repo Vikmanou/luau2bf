@@ -1,84 +1,91 @@
 --!strict
 
-local Types = require('../../shared/types')
 local State = require('../compiler-state')
+type CodegenState = State.CodegenState
+type Node = { [string]: any }
+type EmitBlock = (state: CodegenState, stmts: { Node }) -> ()
+
 local Primitives = require('../bf-emitter')
 local Expr = require('../expressions')
-local Constants = require('../../shared/constants')
 
-type ASTNode = Types.ASTNode
-type CodegenState = State.CodegenState
-type EmitBlock = (state: CodegenState, stmts: { ASTNode }) -> ()
+local BREAK_PREFIX = '__brk_'
+local BREAK_SUFFIX = '__'
+local STOP_PREFIX = '__stop__'
+local STEP_PREFIX = '__step__'
 
-local NT = Constants.NodeType
-
-local function isNegativeStep(stepExpr: ASTNode): boolean
-	if stepExpr.type == NT.NumberLit and (stepExpr.value :: number) < 0 then
+local function isNegativeStep(stepExpr: Node): boolean
+	if stepExpr.tag == 'number' and stepExpr.value < 0 then
 		return true
 	end
-    
-	if stepExpr.type == NT.UnaryOp and stepExpr.op == '-' then
-		local inner = stepExpr.expr :: ASTNode
-		if inner and inner.type == NT.NumberLit then
+
+	if stepExpr.tag == 'unary' and stepExpr.operator.text == '-' then
+		local inner = stepExpr.operand
+		if inner and inner.tag == 'number' then
 			return true
 		end
 	end
-    
+
 	return false
 end
 
-local function emitNumericFor(state: CodegenState, node: ASTNode, emitBlock: EmitBlock)
-	local brkName = `{Constants.Flags.BREAK_PREFIX}{node.line}{Constants.Flags.BREAK_SUFFIX}`
+local function copyVarToTemp(state: CodegenState, varName: string): number
+	local varCell = state.variables[varName]
+	local result = Primitives.allocTemp(state)
+	local tmp = Primitives.allocTemp(state)
+	Primitives.emitCopy(state, varCell, result, tmp)
+	state.nextTemp -= 1  -- free tmp
+	return result
+end
+
+local function emitNumericFor(state: CodegenState, node: Node, emitBlock: EmitBlock)
+	local iName = node.variable.name.text
+	local brkName = `{BREAK_PREFIX}{node.location.beginLine}{BREAK_SUFFIX}`
+	local stopName = `{STOP_PREFIX}{iName}`
+	local stepName = `{STEP_PREFIX}{iName}`
+
 	local brkCell = Primitives.allocVar(state, brkName)
+	local iCell = Primitives.allocVar(state, iName)
+	local stopCell = Primitives.allocVar(state, stopName)
+	local stepCell = Primitives.allocVar(state, stepName)
+
 	Primitives.emitSetCell(state, brkCell, 1)
 	table.insert(state.breakStack, brkCell)
 
-	local iCell = Primitives.allocVar(state, node.name)
-	local stopName = `{Constants.Flags.FOR_STOP_PREFIX}{node.name}`
-	local stopCell = Primitives.allocVar(state, stopName)
-	local stepName = `{Constants.Flags.FOR_STEP_PREFIX}{node.name}`
-	local stepCell = Primitives.allocVar(state, stepName)
-
-	local stepExpr: ASTNode = node.step or { type = NT.NumberLit, value = 1 }
+	local stepExpr = node.step or { tag = 'number', value = 1 }
 	local negativeStep = isNegativeStep(stepExpr)
 
-	-- Initialize i, stop, and step
+	-- Initialise i, stop, step
 	Primitives.withTempFloor(state, state.nextTemp, function()
-		local startVal = Expr.emitExpr(state, node.start)
+		local startVal = Expr.emitExpr(state, node.from)
 		Primitives.emitMoveAdd(state, startVal, iCell)
-
-		local stopVal = Expr.emitExpr(state, node.stop)
+		local stopVal = Expr.emitExpr(state, node.to)
 		Primitives.emitMoveAdd(state, stopVal, stopCell)
-
 		local stepVal = Expr.emitExpr(state, stepExpr)
 		Primitives.emitMoveAdd(state, stepVal, stepCell)
 	end)
 
-	-- Loop condition: i <= stop (positive step) or i >= stop (negative step)
-	local condOp = if negativeStep then '>=' else '<='
+	-- Emit the condition (i <= stop or i >= stop) from variable cells.
 	local function emitCondition(): number
-		local condExpr: ASTNode = {
-			type = 'BinOp',
-			op = condOp,
-			left = { type = 'VarRef', name = node.name, line = node.line },
-			right = { type = 'VarRef', name = stopName, line = node.line },
-		}
-		return Expr.emitExpr(state, condExpr)
+		local iCopy = copyVarToTemp(state, iName)
+		local stopCopy = copyVarToTemp(state, stopName)
+		if negativeStep then
+			return Primitives.emitGreaterOrEqualCells(state, iCopy, stopCopy)
+		else
+			return Primitives.emitLessOrEqualCells(state, iCopy, stopCopy)
+		end
 	end
 
-	-- Start loop
 	local condCell = emitCondition()
 	Primitives.moveTo(state, condCell)
 	Primitives.emit(state, '[')
-
 	Primitives.emitZero(state, condCell)
 
-	emitBlock(state, node.body)
+	emitBlock(state, (node.body :: Node).statements)
 
 	Primitives.resetTemps(state)
 
 	local stepTmp = Primitives.allocTemp(state)
-	Primitives.emitAddVar(state, iCell, stepCell, stepTmp) -- i += step; stepTmp zeroed after
+	Primitives.emitAddVar(state, iCell, stepCell, stepTmp)
 
 	local nextCond = emitCondition()
 
@@ -102,5 +109,5 @@ local function emitNumericFor(state: CodegenState, node: ASTNode, emitBlock: Emi
 end
 
 return {
-    [NT.NumericFor] = emitNumericFor
+	['for'] = emitNumericFor,
 }

@@ -1,23 +1,19 @@
 --!strict
--- While loop codegen.
-
-local Types = require('../../shared/types')
-type ASTNode = Types.ASTNode
 
 local State = require('../compiler-state')
 type CodegenState = State.CodegenState
+type Node = { [string]: any }
+type EmitBlock = (state: CodegenState, stmts: { Node }) -> ()
 
 local Primitives = require('../bf-emitter')
-
 local Expr = require('../expressions')
-local Constants = require('../../shared/constants')
 
-local NT = Constants.NodeType
+local BREAK_PREFIX = '__brk_'
+local BREAK_SUFFIX = '__'
 
-type EmitBlock = (state: CodegenState, stmts: { ASTNode }) -> ()
-
-local function emitWhile(state: CodegenState, node: ASTNode, emitBlock: EmitBlock)
-	local brkName = `{Constants.Flags.BREAK_PREFIX}{node.line}{Constants.Flags.BREAK_SUFFIX}`
+local function emitWhile(state: CodegenState, node: Node, emitBlock: EmitBlock)
+	local line = (node.location :: any).beginLine
+	local brkName = `{BREAK_PREFIX}{line}{BREAK_SUFFIX}`
 	local brkCell = Primitives.allocVar(state, brkName)
 	Primitives.emitSetCell(state, brkCell, 1)
 	table.insert(state.breakStack, brkCell)
@@ -27,7 +23,7 @@ local function emitWhile(state: CodegenState, node: ASTNode, emitBlock: EmitBloc
 	Primitives.emit(state, '[')
 	Primitives.resetTemps(state)
 
-	emitBlock(state, node.body)
+	emitBlock(state, (node.body :: Node).statements)
 
 	Primitives.resetTemps(state)
 	local condCell2 = Expr.emitExpr(state, node.condition)
@@ -52,5 +48,5 @@ local function emitWhile(state: CodegenState, node: ASTNode, emitBlock: EmitBloc
 end
 
 return {
-	[NT.While] = emitWhile
+	['while'] = emitWhile,
 }
