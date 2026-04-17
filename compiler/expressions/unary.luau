@@ -28,8 +28,9 @@ local function emitUnary(state: CodegenState, node: Node, emitExpr: EmitExpr): n
 	local op = node.operator.text
 	local cell = emitExpr(state, node.operand)
 	if op == '-' then return emitNegate(state, cell) end
-	if op == 'not' then return emitNot(state, cell)    end
-	error(`Error [line {node.location.beginLine}]: Unknown unary operator '{op}'`)
+	if op == 'not' then return emitNot(state, cell) end
+	State.report(state, `Error [line {node.location.beginLine}]: Unknown unary operator '{op}'`)
+	return Primitives.allocTemp(state)
 end
 
 return {

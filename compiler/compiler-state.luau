@@ -8,6 +8,7 @@ export type CodegenState = {
 	pointer: number, -- current BF tape pointer position
 	output: { string }, -- accumulated BF code fragments
 	breakStack: { number }, -- stack of break-flag cell indices for nested loops
+	diagnostics: { string }, -- accumulated compile errors
 }
 
 local State = {}
@@ -21,7 +22,12 @@ function State.create(tempStart: number): CodegenState
 		pointer = 0,
 		output = {},
 		breakStack = {},
+		diagnostics = {},
 	}
+end
+
+function State.report(state: CodegenState, msg: string)
+	table.insert(state.diagnostics, msg)
 end
 
 

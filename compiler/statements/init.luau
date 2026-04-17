@@ -37,7 +37,9 @@ function emitStmt(state: CodegenState, node: Node)
 
 	local handler = handlers[node.tag]
 	if not handler then
-		error(`Error: Unsupported statement '{node.tag}'`)
+		local loc = node.location
+		State.report(state, `Error [line {if loc then tostring(loc.beginLine) else '?'}]: Unsupported statement '{node.tag}'`)
+		return
 	end
 
 	handler(state, node, emitBlock)

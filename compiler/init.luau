@@ -13,6 +13,10 @@ function Codegen.generate(root): string
 
 	Statements.emitBlock(state, root.statements)
 
+	if #state.diagnostics > 0 then
+		error(table.concat(state.diagnostics, '\n'))
+	end
+
 	return table.concat(state.output)
 end
 

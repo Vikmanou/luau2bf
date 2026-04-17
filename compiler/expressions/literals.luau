@@ -23,8 +23,10 @@ local function emitLocalRef(state: CodegenState, node: Node, _: EmitExpr): numbe
 	local varName = node["local"].name.text
 	local varCell = state.variables[varName]
 	if varCell == nil then
-		error(`Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
+		State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
+		return Primitives.allocTemp(state)
 	end
+	
 	local result = Primitives.allocTemp(state)
 	local tmp = Primitives.allocTemp(state)
 	Primitives.emitCopy(state, varCell, result, tmp)

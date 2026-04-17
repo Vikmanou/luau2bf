@@ -55,12 +55,14 @@ local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
 	for _, lhs in lhsExprs do
 		local lhsNode = lhs :: Node
 		if lhsNode.tag ~= 'local' then
-			error(`Error [line {node.location.beginLine}]: Only local variable assignment is supported`)
+			State.report(state, `Error [line {node.location.beginLine}]: Only local variable assignment is supported`)
+			return
 		end
-		local varName: string = (lhsNode["local"] :: any).name.text
+		local varName: string = lhsNode["local"].name.text
 		local cell = state.variables[varName]
 		if cell == nil then
-			error(`Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
+			State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
+			return
 		end
 		table.insert(targets, cell)
 	end
@@ -72,13 +74,15 @@ end
 local function emitCompoundAssign(state: CodegenState, node: Node, _: EmitBlock)
 	local lhs = node.variable :: Node
 	if lhs.tag ~= 'local' then
-		error(`Error [line {node.location.beginLine}]: Only local variable compound assignment is supported`)
+		State.report(state, `Error [line {node.location.beginLine}]: Only local variable compound assignment is supported`)
+		return
 	end
 
 	local varName: string = lhs["local"].name.text
 	local cell = state.variables[varName]
 	if cell == nil then
-		error(`Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
+		State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
+		return
 	end
 
 	-- Strip trailing '=' to get the base operator ("+=" → "+")

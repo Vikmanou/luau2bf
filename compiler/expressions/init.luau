@@ -133,7 +133,9 @@ function emitExpr(state: CodegenState, node: Node): number
 		local op = node.operator.text
 		local handler = handlers[op]
 		if not handler then
-			error(`Error: Unknown binary operator '{op}'`)
+			local loc = node.operator.location
+			State.report(state, `Error [line {if loc then tostring(loc.beginLine) else '?'}]: Unknown binary operator '{op}'`)
+			return Primitives.allocTemp(state)
 		end
 		
 		return handler(state, node, emitExpr)
@@ -159,7 +161,8 @@ function emitExpr(state: CodegenState, node: Node): number
 	local handler = handlers[key]
 	if not handler then
 		local loc = node.location
-		error(`Error [line {if loc then tostring(loc.beginLine) else '?'}]: Unknown expression '{key}'`)
+		State.report(state, `Error [line {if loc then tostring(loc.beginLine) else '?'}]: Unknown expression '{key}'`)
+		return Primitives.allocTemp(state)
 	end
 	
 	return handler(state, node, emitExpr)

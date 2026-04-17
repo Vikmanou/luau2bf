@@ -68,12 +68,14 @@ end
 local function emitExprStat(state: CodegenState, node: Node, _emitBlock: EmitBlock)
 	local expr = node.expression :: Node
 	if expr.tag ~= 'call' then
-		error(`Error [line {node.location.beginLine}]: Only function call statements are supported`)
+		State.report(state, `Error [line {node.location.beginLine}]: Only function call statements are supported`)
+		return
 	end
-	
+
 	local func = expr.func :: Node
-	if func.tag ~= 'global' or (func.name :: any).text ~= 'print' then
-		error(`Error [line {node.location.beginLine}]: Only 'print(...)' calls are supported`)
+	if func.tag ~= 'global' or func.name.text ~= 'print' then
+		State.report(state, `Error [line {node.location.beginLine}]: Only 'print(...)' calls are supported`)
+		return
 	end
 
 	-- Unpack Punctuated<AstExpr>
@@ -83,7 +85,8 @@ local function emitExprStat(state: CodegenState, node: Node, _emitBlock: EmitBlo
 	end
 
 	if #args ~= 1 then
-		error(`Error [line {node.location.beginLine}]: print() requires exactly 1 argument`)
+		State.report(state, `Error [line {node.location.beginLine}]: print() requires exactly 1 argument`)
+		return
 	end
 
 	local val = Expr.emitExpr(state, args[1])
