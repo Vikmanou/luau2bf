@@ -3,6 +3,7 @@
 local State = require('../../compiler-state')
 local Primitives = require('../../bf-emitter')
 local Expr = require('../../expressions')
+local StaticStrings = require('../../static-strings')
 
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
@@ -59,28 +60,8 @@ local function emitPrintNumber(state: CodegenState, valCell: number)
 	end)
 end
 
-local function resolveStringLiteral(node: Node): string?
-	if node.tag == 'string' then
-		return node.token.text
-	end
-
-	if node.tag == 'group' then
-		return resolveStringLiteral(node.expression)
-	end
-
-	if node.tag == 'binary' and node.operator.text == '..' then
-		local left = resolveStringLiteral(node.lhsOperand)
-		local right = resolveStringLiteral(node.rhsOperand)
-		if left ~= nil and right ~= nil then
-			return left .. right
-		end
-	end
-
-	return nil
-end
-
 local function emitPrintArg(state: CodegenState, argNode: Node)
-	local resolvedStr = resolveStringLiteral(argNode)
+	local resolvedStr = StaticStrings.resolve(argNode)
 	if resolvedStr ~= nil then
 		Primitives.withTempFloor(state, state.nextTemp, function()
 			local cell = Primitives.allocTemp(state)
