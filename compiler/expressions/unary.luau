@@ -1,11 +1,11 @@
 --!strict
 
 local State = require('../compiler-state')
+local Primitives = require('../bf-emitter')
+
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitExpr = (state: CodegenState, node: Node) -> number
-
-local Primitives = require('../bf-emitter')
 
 local function emitNegate(state: CodegenState, cell: number): number
 	local result = Primitives.allocTemp(state)

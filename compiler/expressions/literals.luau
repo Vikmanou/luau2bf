@@ -1,11 +1,11 @@
 --!strict
 
 local State = require('../compiler-state')
+local Primitives = require('../bf-emitter')
+
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitExpr = (state: CodegenState, node: Node) -> number
-
-local Primitives = require('../bf-emitter')
 
 local function emitNumber(state: CodegenState, node: Node, _: EmitExpr): number
 	local cell = Primitives.allocTemp(state)
@@ -26,7 +26,7 @@ local function emitLocalRef(state: CodegenState, node: Node, _: EmitExpr): numbe
 		State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
 		return Primitives.allocTemp(state)
 	end
-	
+
 	local result = Primitives.allocTemp(state)
 	local tmp = Primitives.allocTemp(state)
 	Primitives.emitCopy(state, varCell, result, tmp)

@@ -1,12 +1,12 @@
 --!strict
 
 local State = require('../compiler-state')
+local Primitives = require('../bf-emitter')
+local Expr = require('../expressions')
+
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitBlock = (state: CodegenState, stmts: { Node }) -> ()
-
-local Primitives = require('../bf-emitter')
-local Expr = require('../expressions')
 
 local function emitDigit(state: CodegenState, digitCell: number, cpTmp: number, scratch: number)
 	Primitives.emitCopy(state, digitCell, scratch, cpTmp)
@@ -54,10 +54,9 @@ local function emitPrintValue(state: CodegenState, valCell: number)
 		Primitives.emitSetCell(state, printed, 0)
 
 		emitPlaceValue(state, work, 100, printed)
-		emitPlaceValue(state, work, 10,  printed)
+		emitPlaceValue(state, work, 10, printed)
 		emitDigit(state, work, cpTmp, scratch)
 
-		-- Newline
 		Primitives.emitSetCell(state, scratch, 10)
 		Primitives.moveTo(state, scratch)
 		Primitives.emit(state, '.')
@@ -78,7 +77,6 @@ local function emitExprStat(state: CodegenState, node: Node, _emitBlock: EmitBlo
 		return
 	end
 
-	-- Unpack Punctuated<AstExpr>
 	local args: { Node } = {}
 	for _, pair in expr.arguments :: { any } do
 		table.insert(args, pair.node)

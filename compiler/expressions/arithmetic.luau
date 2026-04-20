@@ -1,11 +1,11 @@
 --!strict
 
 local State = require('../compiler-state')
+local Primitives = require('../bf-emitter')
+
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitExpr = (state: CodegenState, node: Node) -> number
-
-local Primitives = require('../bf-emitter')
 
 local function emitAdd(state: CodegenState, node: Node, emitExpr: EmitExpr): number
 	local leftCell = emitExpr(state, node.lhsOperand)
@@ -58,6 +58,6 @@ return {
 	['+'] = emitAdd,
 	['-'] = emitSub,
 	['*'] = emitMul,
-	['/'] = function(state, node, emitExpr) return emitDivMod(state, node, emitExpr, true)  end,
+	['/'] = function(state, node, emitExpr) return emitDivMod(state, node, emitExpr, true) end,
 	['%'] = function(state, node, emitExpr) return emitDivMod(state, node, emitExpr, false) end,
 }

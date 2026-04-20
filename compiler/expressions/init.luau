@@ -1,15 +1,12 @@
 --!strict
--- Expression code generation dispatcher.
--- Dispatches on node.tag for non-binary nodes; on node.operator.text for binary nodes.
--- Constant folding is done inline before dispatching to avoid a separate AST pass.
 
 local fs = require('@lute/fs')
 
 local State = require('./compiler-state')
+local Primitives = require('./bf-emitter')
+
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
-
-local Primitives = require('./bf-emitter')
 
 local emitExpr: (state: CodegenState, node: Node) -> number
 
@@ -60,15 +57,15 @@ local function tryFoldBinaryBool(node: Node): boolean?
 		local r = rhs.value
 		if op == '==' then return l == r
 		elseif op == '~=' then return l ~= r
-		elseif op == '<'  then return l <  r
+		elseif op == '<' then return l < r
 		elseif op == '<=' then return l <= r
-		elseif op == '>'  then return l >  r
+		elseif op == '>' then return l > r
 		elseif op == '>=' then return l >= r
 		end
 	end
 
 	if op == 'and' and lhs.tag == 'boolean' then
-		return if lhs.value then nil else false -- nil = not a constant (right side varies)
+		return if lhs.value then nil else false
 	end
 
 	if op == 'or' and lhs.tag == 'boolean' then
@@ -78,7 +75,6 @@ local function tryFoldBinaryBool(node: Node): boolean?
 	return nil
 end
 
--- Algebraic identity reductions.
 local function tryFoldIdentity(node: Node): Node?
 	local lhs = node.lhsOperand
 	local rhs = node.rhsOperand
@@ -104,12 +100,10 @@ end
 function emitExpr(state: CodegenState, node: Node): number
 	loadHandlers()
 
-	-- Unwrap parenthesised expressions
 	if node.tag == 'group' then
 		return emitExpr(state, node.expression)
 	end
 
-	-- Inline constant folding for binary ops
 	if node.tag == 'binary' then
 		local numResult = tryFoldBinary(node)
 		if numResult ~= nil then
@@ -137,7 +131,7 @@ function emitExpr(state: CodegenState, node: Node): number
 			State.report(state, `Error [line {if loc then tostring(loc.beginLine) else '?'}]: Unknown binary operator '{op}'`)
 			return Primitives.allocTemp(state)
 		end
-		
+
 		return handler(state, node, emitExpr)
 	end
 
@@ -164,7 +158,7 @@ function emitExpr(state: CodegenState, node: Node): number
 		State.report(state, `Error [line {if loc then tostring(loc.beginLine) else '?'}]: Unknown expression '{key}'`)
 		return Primitives.allocTemp(state)
 	end
-	
+
 	return handler(state, node, emitExpr)
 end
 

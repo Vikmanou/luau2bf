@@ -24,4 +24,5 @@ return {
 	emitLessThanCells = BfPatterns.emitLessThanCells,
 	emitLessOrEqualCells = BfPatterns.emitLessOrEqualCells,
 	emitGreaterOrEqualCells = BfPatterns.emitGreaterOrEqualCells,
+	emitSelect = BfPatterns.emitSelect,
 }

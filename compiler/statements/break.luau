@@ -1,11 +1,11 @@
 --!strict
 
 local State = require('../compiler-state')
+local Primitives = require('../bf-emitter')
+
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitBlock = (state: CodegenState, stmts: { Node }) -> ()
-
-local Primitives = require('../bf-emitter')
 
 local function emitBreak(state: CodegenState, node: Node, _: EmitBlock)
 	local brkCell = state.breakStack[#state.breakStack]

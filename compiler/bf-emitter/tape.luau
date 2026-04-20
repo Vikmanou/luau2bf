@@ -1,6 +1,7 @@
 --!strict
 
 local State = require('../compiler-state')
+
 type CodegenState = State.CodegenState
 
 local Tape = {}
@@ -10,7 +11,6 @@ function Tape.emit(state: CodegenState, code: string)
 	table.insert(state.output, code)
 end
 
--- Move the pointer to the specified cell
 function Tape.moveTo(state: CodegenState, target: number)
 	local diff = target - state.pointer
 	if diff == 0 then return end
@@ -41,10 +41,9 @@ function Tape.withTempFloor(state: CodegenState, floor: number, fn: () -> ())
 	fn()
 
 	state.tempStart = oldStart
-	state.nextTemp = oldNext -- Full restoration
+	state.nextTemp = oldNext
 end
 
--- Assigns a variable name to a cell on the tape
 function Tape.allocVar(state: CodegenState, name: string): number
 	local cell = state.nextVarCell
 	state.variables[name] = cell

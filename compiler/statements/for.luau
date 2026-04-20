@@ -1,12 +1,12 @@
 --!strict
 
 local State = require('../compiler-state')
+local Primitives = require('../bf-emitter')
+local Expr = require('../expressions')
+
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitBlock = (state: CodegenState, stmts: { Node }) -> ()
-
-local Primitives = require('../bf-emitter')
-local Expr = require('../expressions')
 
 local BREAK_PREFIX = '__brk_'
 local BREAK_SUFFIX = '__'
@@ -33,7 +33,7 @@ local function copyVarToTemp(state: CodegenState, varName: string): number
 	local result = Primitives.allocTemp(state)
 	local tmp = Primitives.allocTemp(state)
 	Primitives.emitCopy(state, varCell, result, tmp)
-	state.nextTemp -= 1  -- free tmp
+	state.nextTemp -= 1
 	return result
 end
 
@@ -54,7 +54,6 @@ local function emitNumericFor(state: CodegenState, node: Node, emitBlock: EmitBl
 	local stepExpr = node.step or { tag = 'number', value = 1 }
 	local negativeStep = isNegativeStep(stepExpr)
 
-	-- Initialise i, stop, step
 	Primitives.withTempFloor(state, state.nextTemp, function()
 		local startVal = Expr.emitExpr(state, node.from)
 		Primitives.emitMoveAdd(state, startVal, iCell)
@@ -64,7 +63,6 @@ local function emitNumericFor(state: CodegenState, node: Node, emitBlock: EmitBl
 		Primitives.emitMoveAdd(state, stepVal, stepCell)
 	end)
 
-	-- Emit the condition (i <= stop or i >= stop) from variable cells.
 	local function emitCondition(): number
 		local iCopy = copyVarToTemp(state, iName)
 		local stopCopy = copyVarToTemp(state, stopName)

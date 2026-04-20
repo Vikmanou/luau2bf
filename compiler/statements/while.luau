@@ -1,12 +1,12 @@
 --!strict
 
 local State = require('../compiler-state')
+local Primitives = require('../bf-emitter')
+local Expr = require('../expressions')
+
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitBlock = (state: CodegenState, stmts: { Node }) -> ()
-
-local Primitives = require('../bf-emitter')
-local Expr = require('../expressions')
 
 local BREAK_PREFIX = '__brk_'
 local BREAK_SUFFIX = '__'

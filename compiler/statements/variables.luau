@@ -1,15 +1,13 @@
 --!strict
--- Variable declaration and assignment codegen.
 
 local State = require('../compiler-state')
+local Primitives = require('../bf-emitter')
+local Expr = require('../expressions')
+
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitBlock = (state: CodegenState, stmts: { Node }) -> ()
 
-local Primitives = require('../bf-emitter')
-local Expr = require('../expressions')
-
--- Extract values from a Punctuated<T> (array of { node: T, separator: ...? })
 local function unpack(p: { any }): { Node }
 	local out = {}
 	for _, pair in p do
@@ -31,11 +29,10 @@ local function moveExprsToCells(state: CodegenState, targets: { number }, source
 		Primitives.emitZero(state, cell)
 		Primitives.emitMoveAdd(state, sources[i], cell)
 	end
-
 	Primitives.resetTemps(state)
 end
 
--- AstStatLocal: local x, y = expr1, expr2
+-- local x, y = expr1, expr2
 local function emitVarDecl(state: CodegenState, node: Node, _: EmitBlock)
 	local vars = unpack(node.variables)
 	local values = unpack(node.values)
@@ -43,11 +40,10 @@ local function emitVarDecl(state: CodegenState, node: Node, _: EmitBlock)
 	for _, astLocal in vars do
 		table.insert(targets, Primitives.allocVar(state, astLocal.name.text))
 	end
-
 	moveExprsToCells(state, targets, evaluateExprs(state, values))
 end
 
--- AstStatAssign: x, y = expr1, expr2
+-- x, y = expr1, expr2
 local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
 	local lhsExprs = unpack(node.variables)
 	local values = unpack(node.values)
@@ -66,11 +62,10 @@ local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
 		end
 		table.insert(targets, cell)
 	end
-
 	moveExprsToCells(state, targets, evaluateExprs(state, values))
 end
 
--- AstStatCompoundAssign: x += expr  →  x = x OP expr
+-- x += expr → x = x OP expr
 local function emitCompoundAssign(state: CodegenState, node: Node, _: EmitBlock)
 	local lhs = node.variable :: Node
 	if lhs.tag ~= 'local' then
@@ -85,18 +80,14 @@ local function emitCompoundAssign(state: CodegenState, node: Node, _: EmitBlock)
 		return
 	end
 
-	-- Strip trailing '=' to get the base operator ("+=" → "+")
 	local compoundOp: string = (node.operand :: any).text
 	local baseOp = compoundOp:sub(1, -2)
 
-	-- Synthesise: varName = varName OP rhs
-	local rhs = node.value :: Node
-	-- Build a synthetic binary node (plain table — no Lute AST needed here)
 	local synthetic: Node = {
 		tag = 'binary',
 		operator = { text = baseOp },
 		lhsOperand = node.variable,
-		rhsOperand = rhs,
+		rhsOperand = node.value :: Node,
 	}
 	local resultCell = Expr.emitExpr(state, synthetic)
 	Primitives.emitZero(state, cell)

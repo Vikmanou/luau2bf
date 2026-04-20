@@ -1,11 +1,11 @@
 --!strict
 
 local State = require('../compiler-state')
+local Primitives = require('../bf-emitter')
+
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitExpr = (state: CodegenState, node: Node) -> number
-
-local Primitives = require('../bf-emitter')
 
 local function emitEqual(state: CodegenState, node: Node, emitExpr: EmitExpr): number
 	local leftCell = emitExpr(state, node.lhsOperand)
@@ -47,21 +47,21 @@ local function emitLessThan(state: CodegenState, node: Node, emitExpr: EmitExpr)
 	return Primitives.emitLessThanCells(state, leftCell, rightCell)
 end
 
--- A > B  ≡  B < A
+-- A > B ≡ B < A
 local function emitGreaterThan(state: CodegenState, node: Node, emitExpr: EmitExpr): number
 	local leftCell = emitExpr(state, node.lhsOperand)
 	local rightCell = emitExpr(state, node.rhsOperand)
 	return Primitives.emitLessThanCells(state, rightCell, leftCell)
 end
 
--- A <= B  ≡  NOT (B < A)
+-- A <= B ≡ NOT (B < A)
 local function emitLessOrEqual(state: CodegenState, node: Node, emitExpr: EmitExpr): number
 	local leftCell = emitExpr(state, node.lhsOperand)
 	local rightCell = emitExpr(state, node.rhsOperand)
 	return Primitives.emitLessOrEqualCells(state, leftCell, rightCell)
 end
 
--- A >= B  ≡  NOT (A < B)
+-- A >= B ≡ NOT (A < B)
 local function emitGreaterOrEqual(state: CodegenState, node: Node, emitExpr: EmitExpr): number
 	local leftCell = emitExpr(state, node.lhsOperand)
 	local rightCell = emitExpr(state, node.rhsOperand)

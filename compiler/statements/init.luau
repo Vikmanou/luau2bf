@@ -1,17 +1,14 @@
 --!strict
--- Statement and block code generation dispatcher.
--- Each submodule returns { [tag] = handler }.
--- To add support for a new statement: create the file, no other wiring needed.
 
 local fs = require('@lute/fs')
 
 local State = require('./compiler-state')
+local Primitives = require('./bf-emitter')
+
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 
-local Primitives = require('./bf-emitter')
-
-local emitStmt:  (state: CodegenState, node: Node) -> ()
+local emitStmt: (state: CodegenState, node: Node) -> ()
 local emitBlock: (state: CodegenState, stmts: { Node }) -> ()
 
 local handlers: { [string]: (state: CodegenState, node: Node, emitBlock: typeof(emitBlock)) -> () } = {}
