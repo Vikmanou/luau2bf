@@ -87,6 +87,22 @@ local function emitExprStat(state: CodegenState, node: Node, _emitBlock: EmitBlo
 		return
 	end
 
+	if args[1].tag == 'string' then
+		Primitives.withTempFloor(state, state.nextTemp, function()
+			local cell = Primitives.allocTemp(state)
+			local str = args[1].token.text
+			for i = 1, #str do
+				Primitives.emitSetCell(state, cell, string.byte(str, i))
+				Primitives.emit(state, '.')
+			end
+			Primitives.emitSetCell(state, cell, 10)
+			Primitives.emit(state, '.')
+			Primitives.emitZero(state, cell)
+		end)
+
+		return
+	end
+
 	local val = Expr.emitExpr(state, args[1])
 	emitPrintValue(state, val)
 end
