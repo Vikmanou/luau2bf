@@ -64,6 +64,26 @@ local function emitPrintValue(state: CodegenState, valCell: number)
 	end)
 end
 
+local function resolveStringLiteral(node: Node): string?
+	if node.tag == 'string' then
+		return node.token.text
+	end
+
+	if node.tag == 'group' then
+		return resolveStringLiteral(node.expression)
+	end
+
+	if node.tag == 'binary' and node.operator.text == '..' then
+		local left = resolveStringLiteral(node.lhsOperand)
+		local right = resolveStringLiteral(node.rhsOperand)
+		if left ~= nil and right ~= nil then
+			return left .. right
+		end
+	end
+	
+	return nil
+end
+
 local function emitExprStat(state: CodegenState, node: Node, _emitBlock: EmitBlock)
 	local expr = node.expression :: Node
 	if expr.tag ~= 'call' then
@@ -87,19 +107,18 @@ local function emitExprStat(state: CodegenState, node: Node, _emitBlock: EmitBlo
 		return
 	end
 
-	if args[1].tag == 'string' then
+	local resolvedStr = resolveStringLiteral(args[1])
+	if resolvedStr ~= nil then
 		Primitives.withTempFloor(state, state.nextTemp, function()
 			local cell = Primitives.allocTemp(state)
-			local str = args[1].token.text
-			for i = 1, #str do
-				Primitives.emitSetCell(state, cell, string.byte(str, i))
+			for i = 1, #resolvedStr do
+				Primitives.emitSetCell(state, cell, string.byte(resolvedStr, i))
 				Primitives.emit(state, '.')
 			end
 			Primitives.emitSetCell(state, cell, 10)
 			Primitives.emit(state, '.')
 			Primitives.emitZero(state, cell)
 		end)
-
 		return
 	end
 

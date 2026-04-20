@@ -12,6 +12,13 @@ local function emitString(state: CodegenState, node: Node, _: EmitExpr): number
 	return Primitives.allocTemp(state)
 end
 
+local function emitConcat(state: CodegenState, node: Node, _: EmitExpr): number
+	local loc = node.operator.location
+	State.report(state, `Error [line {if loc then tostring(loc.beginLine) else '?'}]: String concatenation (..) requires all operands to be string literals`)
+	return Primitives.allocTemp(state)
+end
+
 return {
 	['string'] = emitString,
+	['..'] = emitConcat,
 }
