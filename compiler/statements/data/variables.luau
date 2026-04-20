@@ -3,6 +3,7 @@
 local State = require('../../compiler-state')
 local Primitives = require('../../bf-emitter')
 local Expr = require('../../expressions')
+local TableAccess = require('../../table-access')
 local Tables = require('../../tables')
 
 type CodegenState = State.CodegenState
@@ -34,18 +35,16 @@ local function moveExprsToCells(state: CodegenState, targets: { number }, source
 	Primitives.resetTemps(state)
 end
 
-local function allocateTableEntryValue(state: CodegenState, tableName: string, entryIndex: number, valueNode: Node): number
-	if valueNode.tag == 'table' then
-		State.report(state, `Error [line {valueNode.location.beginLine}]: Nested tables are not supported`)
-		return Primitives.allocVar(state, `__tbl_{tableName}_{entryIndex}_invalid`)
-	end
-
+local function allocateScalarTableValue(state: CodegenState, tableName: string, entryIndex: number, valueNode: Node)
 	local valueCell = Expr.emitExpr(state, valueNode)
 	local targetCell = Primitives.allocVar(state, `__tbl_{tableName}_{entryIndex}`)
 	Primitives.emitZero(state, targetCell)
 	Primitives.emitMoveAdd(state, valueCell, targetCell)
 	Primitives.resetTemps(state)
-	return targetCell
+	return {
+		kind = 'scalar',
+		valueCell = targetCell
+	}
 end
 
 local function buildTable(state: CodegenState, tableName: string, tableNode: Node): TableInfo
@@ -54,33 +53,43 @@ local function buildTable(state: CodegenState, tableName: string, tableNode: Nod
 	local listIndex = 1
 
 	for entryIndex, entry in tableNode.entries do
-		local key = nil
+		local resolvedKey: Tables.TableKey
 		if entry.kind == 'list' then
-			key = Tables.createListKey(listIndex)
+			resolvedKey = Tables.createListKey(listIndex)
 			listIndex += 1
 		elseif entry.kind == 'record' then
-			key = Tables.createRecordKey(entry.key.text)
+			resolvedKey = Tables.createRecordKey(entry.key.text)
 		elseif entry.kind == 'general' then
-			key = Tables.resolveKey(entry.key)
+			local key: any = Tables.resolveKey(entry.key)
 			if key == nil then
 				State.report(state, `Error [line {entry.location.beginLine}]: Table keys must be constant numbers, booleans, or strings`)
 				continue
 			end
+			resolvedKey = key
 		else
 			State.report(state, `Error [line {entry.location.beginLine}]: Unsupported table entry kind '{entry.kind}'`)
 			continue
 		end
 
-		if seenKeys[key.id] then
-			State.report(state, `Error [line {entry.location.beginLine}]: Duplicate table key '{key.id}'`)
+		if seenKeys[resolvedKey.id] then
+			State.report(state, `Error [line {entry.location.beginLine}]: Duplicate table key '{resolvedKey.id}'`)
 			continue
 		end
-		seenKeys[key.id] = true
+		seenKeys[resolvedKey.id] = true
 
-		local valueCell = allocateTableEntryValue(state, tableName, entryIndex, entry.value)
+		local value = nil
+		if entry.value.tag == 'table' then
+			value = {
+				kind = 'table',
+				tableInfo = buildTable(state, `{tableName}_{entryIndex}`, entry.value)
+			}
+		else
+			value = allocateScalarTableValue(state, tableName, entryIndex, entry.value)
+		end
+
 		table.insert(info.entries, {
-			key = key,
-			valueCell = valueCell
+			key = resolvedKey,
+			value = value
 		})
 	end
 
@@ -112,26 +121,63 @@ end
 local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
 	local lhsExprs = unpack(node.variables)
 	local values = unpack(node.values)
-	local targets = {}
-	for _, lhs in lhsExprs do
-		local lhsNode = lhs :: Node
-		if lhsNode.tag ~= 'local' then
-			State.report(state, `Error [line {node.location.beginLine}]: Only local variable assignment is supported`)
+	local sourceCells = evaluateExprs(state, values)
+
+	local function assignToIndex(lhsNode: Node, sourceCell: number)
+		local normalizedNode = if lhsNode.tag == 'indexname' then Tables.lowerIndexName(lhsNode) else lhsNode
+		local constantEntry = TableAccess.resolveConstantEntry(state, normalizedNode)
+		if constantEntry ~= nil then
+			if constantEntry.value.kind ~= 'scalar' then
+				State.report(state, `Error [line {lhsNode.location.beginLine}]: Cannot overwrite nested table with a scalar value`)
+				return
+			end
+			Primitives.emitZero(state, constantEntry.value.valueCell)
+			Primitives.emitMoveAdd(state, sourceCell, constantEntry.value.valueCell)
 			return
 		end
-		local varName: string = lhsNode['local'].name.text
-		if state.tables[varName] ~= nil then
-			State.report(state, `Error [line {node.location.beginLine}]: Table reassignment is not supported`)
+
+		local info = TableAccess.resolveBaseTable(state, normalizedNode.expression)
+		if info == nil then
+			State.report(state, `Error [line {lhsNode.location.beginLine}]: Only local table indexing is supported`)
 			return
 		end
-		local cell = state.variables[varName]
-		if cell == nil then
-			State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
-			return
+
+		local indexCell = Expr.emitExpr(state, normalizedNode.index)
+		for _, entry in info.entries do
+			if entry.key.kind ~= 'string' and entry.value.kind == 'scalar' then
+				local matchCell = TableAccess.emitEqualsKey(state, indexCell, entry.key)
+				local currentCopy = TableAccess.copyCell(state, entry.value.valueCell)
+				local sourceCopy = TableAccess.copyCell(state, sourceCell)
+				Primitives.emitZero(state, entry.value.valueCell)
+				Primitives.emitSelect(state, matchCell, entry.value.valueCell, sourceCopy, currentCopy)
+			end
 		end
-		table.insert(targets, cell)
 	end
-	moveExprsToCells(state, targets, evaluateExprs(state, values))
+
+	for index, lhs in lhsExprs do
+		local lhsNode = lhs :: Node
+		local sourceCell = sourceCells[index]
+		if lhsNode.tag == 'local' then
+			local varName: string = lhsNode['local'].name.text
+			if state.tables[varName] ~= nil then
+				State.report(state, `Error [line {node.location.beginLine}]: Table reassignment is not supported`)
+				return
+			end
+			local cell = state.variables[varName]
+			if cell == nil then
+				State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
+				return
+			end
+			Primitives.emitZero(state, cell)
+			Primitives.emitMoveAdd(state, sourceCell, cell)
+		elseif lhsNode.tag == 'index' or lhsNode.tag == 'indexname' then
+			assignToIndex(lhsNode, sourceCell)
+		else
+			State.report(state, `Error [line {node.location.beginLine}]: Unsupported assignment target`)
+			return
+		end
+	end
+	Primitives.resetTemps(state)
 end
 
 local function emitCompoundAssign(state: CodegenState, node: Node, _: EmitBlock)

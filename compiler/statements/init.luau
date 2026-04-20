@@ -15,8 +15,9 @@ local handlersReady = false
 
 local function loadHandlers()
 	if handlersReady then return end
+	local loadedHandlers = ModuleRegistry.load('./compiler/statements', './statements')
+	handlers = loadedHandlers
 	handlersReady = true
-	handlers = ModuleRegistry.load('./compiler/statements', './statements')
 end
 
 function emitStmt(state: CodegenState, node: Node)

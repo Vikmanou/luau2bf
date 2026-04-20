@@ -2,7 +2,6 @@
 
 local State = require('../../compiler-state')
 local Primitives = require('../../bf-emitter')
-
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitExpr = (state: CodegenState, node: Node) -> number
@@ -37,7 +36,6 @@ local function emitLocalRef(state: CodegenState, node: Node, _: EmitExpr): numbe
 	state.nextTemp -= 1
 	return result
 end
-
 return {
 	['number'] = emitNumber,
 	['boolean'] = emitBool,

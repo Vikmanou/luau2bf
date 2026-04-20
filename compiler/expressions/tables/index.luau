@@ -2,52 +2,21 @@
 
 local State = require('../../compiler-state')
 local Primitives = require('../../bf-emitter')
+local TableAccess = require('../../table-access')
 local Tables = require('../../tables')
 
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitExpr = (state: CodegenState, node: Node) -> number
-type TableKey = Tables.TableKey
 type TableEntry = Tables.TableEntry
 type TableInfo = Tables.TableInfo
 
-local function copyCell(state: CodegenState, src: number): number
-	local dst = Primitives.allocTemp(state)
-	local tmp = Primitives.allocTemp(state)
-	Primitives.emitCopy(state, src, dst, tmp)
-	state.nextTemp -= 1
-	return dst
-end
-
-local function emitKeyConstant(state: CodegenState, key: TableKey): number
-	local cell = Primitives.allocTemp(state)
-	if key.kind == 'number' then
-		Primitives.emitSetCell(state, cell, (key.numberValue :: number) % 256)
-	else
-		Primitives.emitSetCell(state, cell, if key.booleanValue then 1 else 0)
-	end
-	return cell
-end
-
-local function emitEqualsKey(state: CodegenState, sourceCell: number, key: TableKey): number
-	local sourceCopy = copyCell(state, sourceCell)
-	local keyCell = emitKeyConstant(state, key)
-	local result = Primitives.allocTemp(state)
-	Primitives.emitMoveSub(state, keyCell, sourceCopy)
-	Primitives.emitSetCell(state, result, 1)
-	Primitives.moveTo(state, sourceCopy)
-	Primitives.emit(state, '[')
-	Primitives.moveTo(state, result)
-	Primitives.emit(state, '[-]')
-	Primitives.moveTo(state, sourceCopy)
-	Primitives.emit(state, '[-]]')
-	Primitives.emitMoveAdd(state, result, sourceCopy)
-	state.nextTemp = sourceCopy + 1
-	return sourceCopy
-end
-
 local function emitDirectLookup(state: CodegenState, entry: TableEntry): number
-	return copyCell(state, entry.valueCell)
+	if entry.value.kind ~= 'scalar' then
+		State.report(state, 'Error: Table values must be indexed before use')
+		return Primitives.allocTemp(state)
+	end
+	return TableAccess.copyCell(state, entry.value.valueCell)
 end
 
 local function emitDynamicLookup(state: CodegenState, info: TableInfo, indexNode: Node, emitExpr: EmitExpr): number
@@ -57,10 +26,10 @@ local function emitDynamicLookup(state: CodegenState, info: TableInfo, indexNode
 
 	Primitives.withTempFloor(state, state.nextTemp, function()
 		for _, entry in info.entries do
-			if entry.key.kind ~= 'string' then
-				local matchCell = emitEqualsKey(state, indexCell, entry.key)
-				local currentCopy = copyCell(state, resultCell)
-				local entryCopy = copyCell(state, entry.valueCell)
+			if entry.key.kind ~= 'string' and entry.value.kind == 'scalar' then
+				local matchCell = TableAccess.emitEqualsKey(state, indexCell, entry.key)
+				local currentCopy = TableAccess.copyCell(state, resultCell)
+				local entryCopy = TableAccess.copyCell(state, entry.value.valueCell)
 				Primitives.emitZero(state, resultCell)
 				Primitives.emitSelect(state, matchCell, resultCell, entryCopy, currentCopy)
 			end
@@ -71,16 +40,9 @@ local function emitDynamicLookup(state: CodegenState, info: TableInfo, indexNode
 end
 
 local function emitIndex(state: CodegenState, node: Node, emitExpr: EmitExpr): number
-	local tableExpr = node.expression :: Node
-	if tableExpr.tag ~= 'local' then
-		State.report(state, `Error [line {node.location.beginLine}]: Only local table indexing is supported`)
-		return Primitives.allocTemp(state)
-	end
-
-	local tableName = tableExpr['local'].name.text
-	local info = state.tables[tableName]
+	local info = TableAccess.resolveBaseTable(state, node.expression)
 	if info == nil then
-		State.report(state, `Error [line {node.location.beginLine}]: '{tableName}' is not a table`)
+		State.report(state, `Error [line {node.location.beginLine}]: Only local table indexing is supported`)
 		return Primitives.allocTemp(state)
 	end
 
@@ -98,5 +60,8 @@ local function emitIndex(state: CodegenState, node: Node, emitExpr: EmitExpr): n
 end
 
 return {
-	['index'] = emitIndex
+	['index'] = emitIndex,
+	['indexname'] = function(state, node, emitExpr)
+		return emitIndex(state, Tables.lowerIndexName(node), emitExpr)
+	end
 }

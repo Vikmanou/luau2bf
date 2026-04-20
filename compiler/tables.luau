@@ -14,12 +14,16 @@ export type TableKey = {
 
 export type TableEntry = {
 	key: TableKey,
-	valueCell: number
+	value: TableValue
 }
 
 export type TableInfo = {
 	entries: { TableEntry }
 }
+
+export type TableValue =
+	{ kind: 'scalar', valueCell: number }
+	| { kind: 'table', tableInfo: TableInfo }
 
 local Tables = {}
 
@@ -85,6 +89,21 @@ function Tables.findEntry(info: TableInfo, key: TableKey): TableEntry?
 	end
 
 	return nil
+end
+
+function Tables.lowerIndexName(node: Node): Node
+	return {
+		tag = 'index',
+		location = node.location,
+		expression = node.expression,
+		index = {
+			tag = 'string',
+			location = node.indexLocation or node.location,
+			token = {
+				text = node.index.text
+			}
+		}
+	}
 end
 
 return Tables

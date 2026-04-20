@@ -15,8 +15,9 @@ local handlersReady = false
 
 local function loadHandlers()
 	if handlersReady then return end
+	local loadedHandlers = ModuleRegistry.load('./compiler/expressions', './expressions')
+	handlers = loadedHandlers
 	handlersReady = true
-	handlers = ModuleRegistry.load('./compiler/expressions', './expressions')
 end
 
 local function emitLiteralValue(state: CodegenState, value: number): number
