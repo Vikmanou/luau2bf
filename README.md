@@ -41,16 +41,18 @@ The resulting `.bf` file runs on any standard Brainfuck interpreter:
 
 ## Language Support
 
-### Current built-in functions
+### Supported features
 
-- Variables
+- Variables and multiple assignment
 - Arithmetic operators: `+`, `-`, `*`, `/`, `%`, unary `-`
 - Compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`
 - Comparison operators: `==`, `~=`, `<`, `>`, `<=`, `>=`
 - Logical operators: `and`, `or`, `not`
 - Boolean literals: `true`, `false`
-- Control flow: `if` / `elseif` / `else`, `while`, numeric `for`, `repeat...until`
-- Output: `print(expr)`
+- Control flow: `if` / `elseif` / `else`, `while`, numeric `for`, `repeat...until`, `break`
+- Output: `print(...)` — multiple arguments, tab-separated, followed by a newline
+- String literals as `print()` arguments and compile-time `..` concatenation
+- Math builtins: `math.max`, `math.min`
 
 ## How It Works
 
@@ -88,11 +90,9 @@ lute test
 ## Limitations
 
 - **Values are unsigned bytes.** All variables wrap silently at 255 / 0.
-- **No strings.** String literals and `..` concatenation are not supported.
 - **No tables.** Table constructors, indexing, and `#` are not supported.
 - **No user-defined functions.** Closures and `return` are not supported.
-- **`print` takes one integer argument.** Multiple arguments are not supported.
-- **No standard library.** `math`, `string`, `table`, etc. are not available.
+- **Not all standard libraries are available.** `string`, `table`, etc. are not available.
 
 ## Why?
 

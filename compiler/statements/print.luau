@@ -43,7 +43,8 @@ local function emitPlaceValue(state: CodegenState, work: number, divisorVal: num
 	end)
 end
 
-local function emitPrintValue(state: CodegenState, valCell: number)
+-- Emits the digits of valCell with no trailing newline.
+local function emitPrintNumber(state: CodegenState, valCell: number)
 	Primitives.withTempFloor(state, state.nextTemp, function()
 		local work = Primitives.allocTemp(state)
 		local printed = Primitives.allocTemp(state)
@@ -56,11 +57,6 @@ local function emitPrintValue(state: CodegenState, valCell: number)
 		emitPlaceValue(state, work, 100, printed)
 		emitPlaceValue(state, work, 10, printed)
 		emitDigit(state, work, cpTmp, scratch)
-
-		Primitives.emitSetCell(state, scratch, 10)
-		Primitives.moveTo(state, scratch)
-		Primitives.emit(state, '.')
-		Primitives.emitZero(state, scratch)
 	end)
 end
 
@@ -80,8 +76,26 @@ local function resolveStringLiteral(node: Node): string?
 			return left .. right
 		end
 	end
-	
+
 	return nil
+end
+
+-- Emits output for one print() argument with no trailing newline or tab.
+local function emitPrintArg(state: CodegenState, argNode: Node)
+	local resolvedStr = resolveStringLiteral(argNode)
+	if resolvedStr ~= nil then
+		Primitives.withTempFloor(state, state.nextTemp, function()
+			local cell = Primitives.allocTemp(state)
+			for i = 1, #resolvedStr do
+				Primitives.emitSetCell(state, cell, string.byte(resolvedStr, i))
+				Primitives.emit(state, '.')
+			end
+		end)
+		return
+	end
+
+	local val = Expr.emitExpr(state, argNode)
+	emitPrintNumber(state, val)
 end
 
 local function emitExprStat(state: CodegenState, node: Node, _emitBlock: EmitBlock)
@@ -102,28 +116,23 @@ local function emitExprStat(state: CodegenState, node: Node, _emitBlock: EmitBlo
 		table.insert(args, pair.node)
 	end
 
-	if #args ~= 1 then
-		State.report(state, `Error [line {node.location.beginLine}]: print() requires exactly 1 argument`)
-		return
-	end
+	Primitives.withTempFloor(state, state.nextTemp, function()
+		local sep = Primitives.allocTemp(state)
 
-	local resolvedStr = resolveStringLiteral(args[1])
-	if resolvedStr ~= nil then
-		Primitives.withTempFloor(state, state.nextTemp, function()
-			local cell = Primitives.allocTemp(state)
-			for i = 1, #resolvedStr do
-				Primitives.emitSetCell(state, cell, string.byte(resolvedStr, i))
+		for i, arg in args do
+			emitPrintArg(state, arg)
+			if i < #args then
+				Primitives.emitSetCell(state, sep, 9)
+				Primitives.moveTo(state, sep)
 				Primitives.emit(state, '.')
 			end
-			Primitives.emitSetCell(state, cell, 10)
-			Primitives.emit(state, '.')
-			Primitives.emitZero(state, cell)
-		end)
-		return
-	end
+		end
 
-	local val = Expr.emitExpr(state, args[1])
-	emitPrintValue(state, val)
+		Primitives.emitSetCell(state, sep, 10)
+		Primitives.moveTo(state, sep)
+		Primitives.emit(state, '.')
+		Primitives.emitZero(state, sep)
+	end)
 end
 
 return {
