@@ -1,8 +1,8 @@
 --!strict
 
-local fs = require('@lute/fs')
-
 local State = require('./compiler-state')
+local ModuleRegistry = require('./module-registry')
+local Optimization = require('./expr-optimization')
 local Primitives = require('./bf-emitter')
 
 type CodegenState = State.CodegenState
@@ -16,85 +16,19 @@ local handlersReady = false
 local function loadHandlers()
 	if handlersReady then return end
 	handlersReady = true
-
-	local entries = fs.listdir('./compiler/expressions')
-	for _, entry in entries do
-		if entry.type ~= 'file' or not entry.name:find('%.luau$') or entry.name == 'init.luau' then continue end
-		local name = entry.name:gsub('%.luau$', '')
-		local module = (require)(`./expressions/{name}`)
-		for key, handler in module do
-			handlers[key] = handler
-		end
-	end
+	handlers = ModuleRegistry.load('./compiler/expressions', './expressions')
 end
 
-local function tryFoldBinary(node: Node): number?
-	local lhs = node.lhsOperand
-	local rhs = node.rhsOperand
-	local op = node.operator.text
-
-	if lhs.tag == 'number' and rhs.tag == 'number' then
-		local l = lhs.value
-		local r = rhs.value
-		if op == '+' then return l + r
-		elseif op == '-' then return l - r
-		elseif op == '*' then return l * r
-		elseif op == '/' and r ~= 0 then return l / r
-		elseif op == '//' and r ~= 0 then return math.floor(l / r)
-		elseif op == '%' and r ~= 0 then return l % r
-		end
-	end
-	return nil
+local function emitLiteralValue(state: CodegenState, value: number): number
+	local cell = Primitives.allocTemp(state)
+	Primitives.emitSetCell(state, cell, value % 256)
+	return cell
 end
 
-local function tryFoldBinaryBool(node: Node): boolean?
-	local lhs = node.lhsOperand
-	local rhs = node.rhsOperand
-	local op = node.operator.text
-
-	if lhs.tag == 'number' and rhs.tag == 'number' then
-		local l = lhs.value
-		local r = rhs.value
-		if op == '==' then return l == r
-		elseif op == '~=' then return l ~= r
-		elseif op == '<' then return l < r
-		elseif op == '<=' then return l <= r
-		elseif op == '>' then return l > r
-		elseif op == '>=' then return l >= r
-		end
-	end
-
-	if op == 'and' and lhs.tag == 'boolean' then
-		return if lhs.value then nil else false
-	end
-
-	if op == 'or' and lhs.tag == 'boolean' then
-		return if lhs.value then true else nil
-	end
-
-	return nil
-end
-
-local function tryFoldIdentity(node: Node): Node?
-	local lhs = node.lhsOperand
-	local rhs = node.rhsOperand
-	local op = node.operator.text
-
-	if op == '*' then
-		if rhs.tag == 'number' and rhs.value == 1 then return lhs end
-		if lhs.tag == 'number' and lhs.value == 1 then return rhs end
-		if rhs.tag == 'number' and rhs.value == 0 then return { tag = 'number', value = 0 } end
-		if lhs.tag == 'number' and lhs.value == 0 then return { tag = 'number', value = 0 } end
-	elseif op == '+' then
-		if rhs.tag == 'number' and rhs.value == 0 then return lhs end
-		if lhs.tag == 'number' and lhs.value == 0 then return rhs end
-	elseif op == '-' then
-		if rhs.tag == 'number' and rhs.value == 0 then return lhs end
-	elseif op == '/' or op == '//' then
-		if rhs.tag == 'number' and rhs.value == 1 then return lhs end
-	end
-
-	return nil
+local function emitBooleanValue(state: CodegenState, value: boolean): number
+	local cell = Primitives.allocTemp(state)
+	Primitives.emitSetCell(state, cell, if value then 1 else 0)
+	return cell
 end
 
 function emitExpr(state: CodegenState, node: Node): number
@@ -104,26 +38,18 @@ function emitExpr(state: CodegenState, node: Node): number
 		return emitExpr(state, node.expression)
 	end
 
+	local optimized = Optimization.optimize(node)
+	if optimized ~= nil then
+		if optimized.kind == 'number' then
+			return emitLiteralValue(state, optimized.value)
+		elseif optimized.kind == 'boolean' then
+			return emitBooleanValue(state, optimized.value)
+		else
+			return emitExpr(state, optimized.value)
+		end
+	end
+
 	if node.tag == 'binary' then
-		local numResult = tryFoldBinary(node)
-		if numResult ~= nil then
-			local cell = Primitives.allocTemp(state)
-			Primitives.emitSetCell(state, cell, numResult % 256)
-			return cell
-		end
-
-		local boolResult = tryFoldBinaryBool(node)
-		if boolResult ~= nil then
-			local cell = Primitives.allocTemp(state)
-			Primitives.emitSetCell(state, cell, if boolResult then 1 else 0)
-			return cell
-		end
-
-		local identityNode = tryFoldIdentity(node)
-		if identityNode ~= nil then
-			return emitExpr(state, identityNode)
-		end
-
 		local op = node.operator.text
 		local handler = handlers[op]
 		if not handler then
@@ -133,22 +59,6 @@ function emitExpr(state: CodegenState, node: Node): number
 		end
 
 		return handler(state, node, emitExpr)
-	end
-
-	if node.tag == 'unary' then
-		local op = node.operator.text
-		local inner = node.operand
-		if op == '-' and inner.tag == 'number' then
-			local cell = Primitives.allocTemp(state)
-			Primitives.emitSetCell(state, cell, (-inner.value) % 256)
-			return cell
-		end
-
-		if op == 'not' and inner.tag == 'boolean' then
-			local cell = Primitives.allocTemp(state)
-			Primitives.emitSetCell(state, cell, if inner.value then 0 else 1)
-			return cell
-		end
 	end
 
 	local key = node.tag

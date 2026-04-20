@@ -1,7 +1,7 @@
 --!strict
 
-local State = require('../compiler-state')
-local Primitives = require('../bf-emitter')
+local State = require('../../compiler-state')
+local Primitives = require('../../bf-emitter')
 
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
@@ -20,7 +20,7 @@ local function emitBool(state: CodegenState, node: Node, _: EmitExpr): number
 end
 
 local function emitLocalRef(state: CodegenState, node: Node, _: EmitExpr): number
-	local varName = node["local"].name.text
+	local varName = node['local'].name.text
 	local varCell = state.variables[varName]
 	if varCell == nil then
 		State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)

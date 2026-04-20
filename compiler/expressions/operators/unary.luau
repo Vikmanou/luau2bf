@@ -1,7 +1,7 @@
 --!strict
 
-local State = require('../compiler-state')
-local Primitives = require('../bf-emitter')
+local State = require('../../compiler-state')
+local Primitives = require('../../bf-emitter')
 
 type CodegenState = State.CodegenState
 type Node = { [string]: any }

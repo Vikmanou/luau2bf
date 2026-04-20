@@ -1,8 +1,8 @@
 --!strict
 
-local State = require('../compiler-state')
-local Primitives = require('../bf-emitter')
-local Expr = require('../expressions')
+local State = require('../../compiler-state')
+local Primitives = require('../../bf-emitter')
+local Expr = require('../../expressions')
 
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
@@ -32,7 +32,6 @@ local function moveExprsToCells(state: CodegenState, targets: { number }, source
 	Primitives.resetTemps(state)
 end
 
--- local x, y = expr1, expr2
 local function emitVarDecl(state: CodegenState, node: Node, _: EmitBlock)
 	local vars = unpack(node.variables)
 	local values = unpack(node.values)
@@ -43,7 +42,6 @@ local function emitVarDecl(state: CodegenState, node: Node, _: EmitBlock)
 	moveExprsToCells(state, targets, evaluateExprs(state, values))
 end
 
--- x, y = expr1, expr2
 local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
 	local lhsExprs = unpack(node.variables)
 	local values = unpack(node.values)
@@ -54,7 +52,7 @@ local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
 			State.report(state, `Error [line {node.location.beginLine}]: Only local variable assignment is supported`)
 			return
 		end
-		local varName: string = lhsNode["local"].name.text
+		local varName: string = lhsNode['local'].name.text
 		local cell = state.variables[varName]
 		if cell == nil then
 			State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
@@ -65,7 +63,6 @@ local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
 	moveExprsToCells(state, targets, evaluateExprs(state, values))
 end
 
--- x += expr → x = x OP expr
 local function emitCompoundAssign(state: CodegenState, node: Node, _: EmitBlock)
 	local lhs = node.variable :: Node
 	if lhs.tag ~= 'local' then
@@ -73,7 +70,7 @@ local function emitCompoundAssign(state: CodegenState, node: Node, _: EmitBlock)
 		return
 	end
 
-	local varName: string = lhs["local"].name.text
+	local varName: string = lhs['local'].name.text
 	local cell = state.variables[varName]
 	if cell == nil then
 		State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)

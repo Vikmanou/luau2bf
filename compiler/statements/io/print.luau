@@ -1,8 +1,8 @@
 --!strict
 
-local State = require('../compiler-state')
-local Primitives = require('../bf-emitter')
-local Expr = require('../expressions')
+local State = require('../../compiler-state')
+local Primitives = require('../../bf-emitter')
+local Expr = require('../../expressions')
 
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
@@ -43,7 +43,6 @@ local function emitPlaceValue(state: CodegenState, work: number, divisorVal: num
 	end)
 end
 
--- Emits the digits of valCell with no trailing newline.
 local function emitPrintNumber(state: CodegenState, valCell: number)
 	Primitives.withTempFloor(state, state.nextTemp, function()
 		local work = Primitives.allocTemp(state)
@@ -80,7 +79,6 @@ local function resolveStringLiteral(node: Node): string?
 	return nil
 end
 
--- Emits output for one print() argument with no trailing newline or tab.
 local function emitPrintArg(state: CodegenState, argNode: Node)
 	local resolvedStr = resolveStringLiteral(argNode)
 	if resolvedStr ~= nil then

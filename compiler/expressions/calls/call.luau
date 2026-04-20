@@ -1,8 +1,8 @@
 --!strict
 
-local State = require('../compiler-state')
-local Primitives = require('../bf-emitter')
-local Builtins = require('./builtins')
+local State = require('../../compiler-state')
+local Primitives = require('../../bf-emitter')
+local Builtins = require('../builtins')
 
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
@@ -19,7 +19,6 @@ end
 local function emitCall(state: CodegenState, node: Node, emitExpr: EmitExpr): number
 	local func = node.func :: Node
 
-	-- namespace.method(args)
 	if func.tag == 'indexname' then
 		local tableExpr = func.expression :: Node
 		if tableExpr.tag == 'global' then

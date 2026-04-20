@@ -1,9 +1,11 @@
 --!strict
 
-local Math = require('./builtins/math')
+local Math = require('./builtins/libraries/math')
 
 local builtins: { [string]: any } = {}
 
-for k, v in Math do builtins[k] = v end
+for key, handler in Math do
+	builtins[key :: string] = handler
+end
 
 return builtins

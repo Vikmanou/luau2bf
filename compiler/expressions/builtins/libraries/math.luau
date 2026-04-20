@@ -1,8 +1,8 @@
 --!strict
 -- Built-in macros for the `math` global.
 
-local State = require('../../compiler-state')
-local Primitives = require('../../bf-emitter')
+local State = require('../../../compiler-state')
+local Primitives = require('../../../bf-emitter')
 
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
@@ -86,7 +86,6 @@ local function emitMathClamp(state: CodegenState, args: { Node }, emitExpr: Emit
 		local xForCmp = Primitives.allocTemp(state)
 		local loForCmp = Primitives.allocTemp(state)
 
-		-- Step 1: xCell = max(x, lo)
 		Primitives.emitCopy(state, xCell, xCopy, tmp)
 		Primitives.emitCopy(state, xCell, xForCmp, tmp)
 		Primitives.emitCopy(state, loCell, loCopy, tmp)
@@ -96,13 +95,11 @@ local function emitMathClamp(state: CodegenState, args: { Node }, emitExpr: Emit
 		local lessLo = Primitives.emitLessThanCells(state, xForCmp, loForCmp)
 		Primitives.emitSelect(state, lessLo, xCell, loCopy, xCopy)
 
-		-- Step 2 cells allocated here so they land above emitSelect's chosen cell
 		local resultCopy = Primitives.allocTemp(state)
 		local resultForCmp = Primitives.allocTemp(state)
 		local hiCopy = Primitives.allocTemp(state)
 		local hiForCmp = Primitives.allocTemp(state)
 
-		-- Step 2: xCell = min(xCell, hi)
 		Primitives.emitCopy(state, xCell, resultCopy, tmp)
 		Primitives.emitCopy(state, xCell, resultForCmp, tmp)
 		Primitives.emitCopy(state, hiCell, hiCopy, tmp)
@@ -117,8 +114,6 @@ local function emitMathClamp(state: CodegenState, args: { Node }, emitExpr: Emit
 	return xCell
 end
 
--- isqrt(x) = n where n^2 <= x < (n+1)^2. Works for x in 0..255; loops at most 15 times.
--- Uses identity: sum of first n odd numbers = n^2, so subtract 1, 3, 5, ... until remainder < next odd.
 local function emitMathSqrt(state: CodegenState, args: { Node }, emitExpr: EmitExpr): number
 	if #args ~= 1 then
 		State.report(state, `Error: math.sqrt expects 1 argument, got {#args}`)
@@ -128,20 +123,17 @@ local function emitMathSqrt(state: CodegenState, args: { Node }, emitExpr: EmitE
 	local xCell = emitExpr(state, args[1])
 
 	Primitives.withTempFloor(state, state.nextTemp, function()
-		-- Persistent cells across loop iterations
 		local tmp = Primitives.allocTemp(state)
 		local remaining = Primitives.allocTemp(state)
 		local result = Primitives.allocTemp(state)
 		local delta = Primitives.allocTemp(state)
 		local loopFlag = Primitives.allocTemp(state)
-		-- Loop body scratch cells at fixed positions (re-initialised every BF iteration)
 		local remCmp = Primitives.allocTemp(state)
 		local deltaCmp = Primitives.allocTemp(state)
 		local notTaken = Primitives.allocTemp(state)
 		local deltaCopy = Primitives.allocTemp(state)
 		local inc2 = Primitives.allocTemp(state)
 		local inc1 = Primitives.allocTemp(state)
-		-- emitLessOrEqualCells will allocate its internals above inc1
 
 		Primitives.emitCopy(state, xCell, remaining, tmp)
 		Primitives.emitSetCell(state, result, 0)
@@ -151,7 +143,6 @@ local function emitMathSqrt(state: CodegenState, args: { Node }, emitExpr: EmitE
 		Primitives.moveTo(state, loopFlag)
 		Primitives.emit(state, '[')
 
-		-- Check delta <= remaining
 		Primitives.emitCopy(state, remaining, remCmp, tmp)
 		Primitives.emitCopy(state, delta, deltaCmp, tmp)
 		local canContinue = Primitives.emitLessOrEqualCells(state, deltaCmp, remCmp)
@@ -159,7 +150,6 @@ local function emitMathSqrt(state: CodegenState, args: { Node }, emitExpr: EmitE
 		Primitives.emitCopy(state, delta, deltaCopy, tmp)
 		Primitives.emitSetCell(state, notTaken, 1)
 
-		-- if canContinue: remaining -= delta; delta += 2; result += 1
 		Primitives.moveTo(state, canContinue)
 		Primitives.emit(state, '[')
 		Primitives.emitMoveSub(state, deltaCopy, remaining)
@@ -172,7 +162,6 @@ local function emitMathSqrt(state: CodegenState, args: { Node }, emitExpr: EmitE
 		Primitives.moveTo(state, canContinue)
 		Primitives.emit(state, '[-]]')
 
-		-- else: stop loop
 		Primitives.moveTo(state, notTaken)
 		Primitives.emit(state, '[')
 		Primitives.emitZero(state, loopFlag)
