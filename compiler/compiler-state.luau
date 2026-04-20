@@ -1,7 +1,12 @@
 --!strict
 
+local Tables = require('./tables')
+
+type TableInfo = Tables.TableInfo
+
 export type CodegenState = {
 	variables: { [string]: number },
+	tables: { [string]: TableInfo },
 	nextVarCell: number,
 	tempStart: number,
 	nextTemp: number,
@@ -16,6 +21,7 @@ local State = {}
 function State.create(tempStart: number): CodegenState
 	return {
 		variables = {},
+		tables = {},
 		nextVarCell = 0,
 		tempStart = tempStart,
 		nextTemp = tempStart,

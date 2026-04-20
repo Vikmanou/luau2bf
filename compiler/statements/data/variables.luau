@@ -3,10 +3,12 @@
 local State = require('../../compiler-state')
 local Primitives = require('../../bf-emitter')
 local Expr = require('../../expressions')
+local Tables = require('../../tables')
 
 type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitBlock = (state: CodegenState, stmts: { Node }) -> ()
+type TableInfo = Tables.TableInfo
 
 local function unpack(p: { any }): { Node }
 	local out = {}
@@ -32,14 +34,79 @@ local function moveExprsToCells(state: CodegenState, targets: { number }, source
 	Primitives.resetTemps(state)
 end
 
+local function allocateTableEntryValue(state: CodegenState, tableName: string, entryIndex: number, valueNode: Node): number
+	if valueNode.tag == 'table' then
+		State.report(state, `Error [line {valueNode.location.beginLine}]: Nested tables are not supported`)
+		return Primitives.allocVar(state, `__tbl_{tableName}_{entryIndex}_invalid`)
+	end
+
+	local valueCell = Expr.emitExpr(state, valueNode)
+	local targetCell = Primitives.allocVar(state, `__tbl_{tableName}_{entryIndex}`)
+	Primitives.emitZero(state, targetCell)
+	Primitives.emitMoveAdd(state, valueCell, targetCell)
+	Primitives.resetTemps(state)
+	return targetCell
+end
+
+local function buildTable(state: CodegenState, tableName: string, tableNode: Node): TableInfo
+	local info: TableInfo = { entries = {} }
+	local seenKeys: { [string]: boolean } = {}
+	local listIndex = 1
+
+	for entryIndex, entry in tableNode.entries do
+		local key = nil
+		if entry.kind == 'list' then
+			key = Tables.createListKey(listIndex)
+			listIndex += 1
+		elseif entry.kind == 'record' then
+			key = Tables.createRecordKey(entry.key.text)
+		elseif entry.kind == 'general' then
+			key = Tables.resolveKey(entry.key)
+			if key == nil then
+				State.report(state, `Error [line {entry.location.beginLine}]: Table keys must be constant numbers, booleans, or strings`)
+				continue
+			end
+		else
+			State.report(state, `Error [line {entry.location.beginLine}]: Unsupported table entry kind '{entry.kind}'`)
+			continue
+		end
+
+		if seenKeys[key.id] then
+			State.report(state, `Error [line {entry.location.beginLine}]: Duplicate table key '{key.id}'`)
+			continue
+		end
+		seenKeys[key.id] = true
+
+		local valueCell = allocateTableEntryValue(state, tableName, entryIndex, entry.value)
+		table.insert(info.entries, {
+			key = key,
+			valueCell = valueCell
+		})
+	end
+
+	return info
+end
+
 local function emitVarDecl(state: CodegenState, node: Node, _: EmitBlock)
 	local vars = unpack(node.variables)
 	local values = unpack(node.values)
 	local targets = {}
-	for _, astLocal in vars do
-		table.insert(targets, Primitives.allocVar(state, astLocal.name.text))
+	local scalarValues = {}
+
+	for index, astLocal in vars do
+		local name = astLocal.name.text
+		local valueNode = values[index]
+		if valueNode ~= nil and valueNode.tag == 'table' then
+			state.tables[name] = buildTable(state, name, valueNode)
+		else
+			table.insert(targets, Primitives.allocVar(state, name))
+			table.insert(scalarValues, valueNode)
+		end
 	end
-	moveExprsToCells(state, targets, evaluateExprs(state, values))
+
+	if #targets > 0 then
+		moveExprsToCells(state, targets, evaluateExprs(state, scalarValues))
+	end
 end
 
 local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
@@ -53,6 +120,10 @@ local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
 			return
 		end
 		local varName: string = lhsNode['local'].name.text
+		if state.tables[varName] ~= nil then
+			State.report(state, `Error [line {node.location.beginLine}]: Table reassignment is not supported`)
+			return
+		end
 		local cell = state.variables[varName]
 		if cell == nil then
 			State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
@@ -71,6 +142,10 @@ local function emitCompoundAssign(state: CodegenState, node: Node, _: EmitBlock)
 	end
 
 	local varName: string = lhs['local'].name.text
+	if state.tables[varName] ~= nil then
+		State.report(state, `Error [line {node.location.beginLine}]: Table compound assignment is not supported`)
+		return
+	end
 	local cell = state.variables[varName]
 	if cell == nil then
 		State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
@@ -95,5 +170,5 @@ end
 return {
 	['local'] = emitVarDecl,
 	['assign'] = emitAssign,
-	['compoundassign'] = emitCompoundAssign,
+	['compoundassign'] = emitCompoundAssign
 }

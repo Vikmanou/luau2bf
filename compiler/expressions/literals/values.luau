@@ -23,6 +23,10 @@ local function emitLocalRef(state: CodegenState, node: Node, _: EmitExpr): numbe
 	local varName = node['local'].name.text
 	local varCell = state.variables[varName]
 	if varCell == nil then
+		if state.tables[varName] ~= nil then
+			State.report(state, `Error [line {node.location.beginLine}]: Table '{varName}' must be indexed before use`)
+			return Primitives.allocTemp(state)
+		end
 		State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
 		return Primitives.allocTemp(state)
 	end
@@ -37,5 +41,5 @@ end
 return {
 	['number'] = emitNumber,
 	['boolean'] = emitBool,
-	['local'] = emitLocalRef,
+	['local'] = emitLocalRef
 }
