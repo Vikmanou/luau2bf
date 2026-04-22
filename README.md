@@ -51,8 +51,10 @@ The resulting `.bf` file runs on any standard Brainfuck interpreter:
 - Boolean literals: `true`, `false`
 - Control flow: `if` / `elseif` / `else`, `while`, numeric `for`, `repeat...until`, `break`
 - Output: `print(...)` — multiple arguments, tab-separated, followed by a newline
+- Length operator: `#` on string literals and tables
 - String literals as `print()` arguments and compile-time `..` concatenation
-- Math builtins: `math.max`, `math.min`
+- String builtins: `string.len`, `string.byte`, `string.sub`, `string.rep`
+- Math builtins: `math.max`, `math.min`, `math.clamp`, `math.sqrt`
 
 ## How It Works
 
@@ -90,9 +92,9 @@ lute test
 ## Limitations
 
 - **Values are unsigned bytes.** All variables wrap silently at 255 / 0.
-- **No tables.** Table constructors, indexing, and `#` are not supported.
+- **Tables are compile-time.** Table structure must be known at compile time. No dynamic table creation or resizing.
 - **No user-defined functions.** Closures and `return` are not supported.
-- **Not all standard libraries are available.** `string`, `table`, etc. are not available.
+- **Limited standard libraries.** Only a subset of `math` and `string` functions are available. All string operations require compile-time constant arguments.
 
 ## Why?
 

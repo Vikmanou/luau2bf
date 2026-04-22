@@ -38,6 +38,10 @@ function Optimization.optimize(node: Node): FoldedResult?
 		if op == 'not' and inner.tag == 'boolean' then
 			return { kind = 'boolean', value = not inner.value }
 		end
+
+		if op == '#' and inner.tag == 'string' then
+			return { kind = 'number', value = #inner.token.text }
+		end
 	end
 
 	return nil

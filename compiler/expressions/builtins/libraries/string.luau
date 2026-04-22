@@ -60,7 +60,62 @@ local function emitStringByte(state: CodegenState, args: { Node }, _emitExpr: Em
 	return emitConstantNumber(state, byteValue)
 end
 
+local function emitStringSub(state: CodegenState, args: { Node }, _emitExpr: EmitExpr): number
+	if #args < 2 or #args > 3 then
+		State.report(state, `Error: string.sub expects 2 or 3 arguments, got {#args}`)
+		return Primitives.allocTemp(state)
+	end
+
+	local value = StaticStrings.resolve(args[1])
+	if value == nil then
+		State.report(state, 'Error: string.sub requires a compile-time string argument')
+		return Primitives.allocTemp(state)
+	end
+
+	local startIndex = StaticStrings.resolveNumber(args[2])
+	if startIndex == nil or startIndex % 1 ~= 0 then
+		State.report(state, 'Error: string.sub start index must be an integer literal')
+		return Primitives.allocTemp(state)
+	end
+
+	local endIndex
+	if args[3] ~= nil then
+		endIndex = StaticStrings.resolveNumber(args[3])
+		if endIndex == nil or endIndex % 1 ~= 0 then
+			State.report(state, 'Error: string.sub end index must be an integer literal')
+			return Primitives.allocTemp(state)
+		end
+	end
+
+	State.report(state, `Error: string.sub returns a string which cannot be stored as a scalar value.`)
+	return Primitives.allocTemp(state)
+end
+
+local function emitStringRep(state: CodegenState, args: { Node }, _emitExpr: EmitExpr): number
+	if #args ~= 2 then
+		State.report(state, `Error: string.rep expects 2 arguments, got {#args}`)
+		return Primitives.allocTemp(state)
+	end
+
+	local value = StaticStrings.resolve(args[1])
+	if value == nil then
+		State.report(state, 'Error: string.rep requires a compile-time string argument')
+		return Primitives.allocTemp(state)
+	end
+
+	local count = StaticStrings.resolveNumber(args[2])
+	if count == nil or count < 0 or count % 1 ~= 0 then
+		State.report(state, 'Error: string.rep count must be a non-negative integer literal')
+		return Primitives.allocTemp(state)
+	end
+
+	State.report(state, 'Error: string.rep returns a string which cannot be stored as a scalar value.')
+	return Primitives.allocTemp(state)
+end
+
 return {
 	['string.len'] = emitStringLen,
 	['string.byte'] = emitStringByte,
+	['string.sub'] = emitStringSub,
+	['string.rep'] = emitStringRep,
 }
