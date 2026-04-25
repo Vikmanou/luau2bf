@@ -77,21 +77,9 @@ local function emitPrintArg(state: CodegenState, argNode: Node)
 	emitPrintNumber(state, val)
 end
 
-local function emitExprStat(state: CodegenState, node: Node, _emitBlock: EmitBlock)
-	local expr = node.expression :: Node
-	if expr.tag ~= 'call' then
-		State.report(state, `Error [line {node.location.beginLine}]: Only function call statements are supported`)
-		return
-	end
-
-	local func = expr.func :: Node
-	if func.tag ~= 'global' or func.name.text ~= 'print' then
-		State.report(state, `Error [line {node.location.beginLine}]: Only 'print(...)' calls are supported`)
-		return
-	end
-
+local function emitPrintCall(state: CodegenState, node: Node)
 	local args: { Node } = {}
-	for _, pair in expr.arguments :: { any } do
+	for _, pair in node.arguments :: { any } do
 		table.insert(args, pair.node)
 	end
 
@@ -111,6 +99,25 @@ local function emitExprStat(state: CodegenState, node: Node, _emitBlock: EmitBlo
 		Primitives.moveTo(state, sep)
 		Primitives.emit(state, '.')
 		Primitives.emitZero(state, sep)
+	end)
+end
+
+
+local function emitExprStat(state: CodegenState, node: Node, _emitBlock: EmitBlock)
+	local expr = node.expression :: Node
+	if expr.tag ~= 'call' then
+		State.report(state, `Error [line {node.location.beginLine}]: Only function call statements are supported`)
+		return
+	end
+
+	local func = expr.func :: Node
+	if func.tag == 'global' and func.name.text == 'print' then
+		emitPrintCall(state, expr)
+		return
+	end
+
+	Primitives.withTempFloor(state, state.nextTemp, function()
+		Expr.emitExpr(state, expr)
 	end)
 end
 
