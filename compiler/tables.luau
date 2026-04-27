@@ -25,6 +25,16 @@ export type TableValue =
 	{ kind: 'scalar', valueCell: number }
 	| { kind: 'table', tableInfo: TableInfo }
 
+export type TablePlanValue =
+	{ kind: 'scalar', tempCell: number }
+	| { kind: 'table', entries: { TablePlanEntry } }
+
+export type TablePlanEntry = {
+	key: TableKey,
+	value: TablePlanValue,
+	line: number,
+}
+
 local Tables = {}
 
 local function makeNumberKey(value: number): TableKey

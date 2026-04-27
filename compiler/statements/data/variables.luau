@@ -10,6 +10,10 @@ type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitBlock = (state: CodegenState, stmts: { Node }) -> ()
 type TableInfo = Tables.TableInfo
+type TableKey = Tables.TableKey
+
+type TablePlanValue = Tables.TablePlanValue
+type TablePlanEntry = Tables.TablePlanEntry
 
 local function unpack(p: { any }): { Node }
 	local out = {}
@@ -47,37 +51,54 @@ local function allocateScalarTableValue(state: CodegenState, tableName: string, 
 	}
 end
 
+local function resolveEntryKey(
+	state: CodegenState,
+	entry: Node,
+	listIndex: number,
+	seenKeys: { [string]: boolean }
+): (Tables.TableKey?, number)
+	local resolvedKey: Tables.TableKey?
+	local nextListIndex = listIndex
+
+	if entry.kind == 'list' then
+		resolvedKey = Tables.createListKey(listIndex)
+		nextListIndex = listIndex + 1
+	elseif entry.kind == 'record' then
+		resolvedKey = Tables.createRecordKey(entry.key.text)
+	elseif entry.kind == 'general' then
+		local key: any = Tables.resolveKey(entry.key)
+		if key == nil then
+			State.report(state, `Error [line {entry.location.beginLine}]: Table keys must be constant numbers, booleans, or strings`)
+			return nil, listIndex
+		end
+
+		resolvedKey = key :: Tables.TableKey
+	else
+		State.report(state, `Error [line {entry.location.beginLine}]: Unsupported table entry kind '{entry.kind}'`)
+		return nil, listIndex
+	end
+
+	local key = resolvedKey :: Tables.TableKey
+	if seenKeys[key.id] then
+		State.report(state, `Error [line {entry.location.beginLine}]: Duplicate table key '{key.id}'`)
+		return nil, listIndex
+	end
+	seenKeys[key.id] = true
+
+	return key, nextListIndex
+end
+
 local function buildTable(state: CodegenState, tableName: string, tableNode: Node): TableInfo
 	local info: TableInfo = { entries = {} }
 	local seenKeys: { [string]: boolean } = {}
 	local listIndex = 1
 
 	for entryIndex, entry in tableNode.entries do
-		local resolvedKey: Tables.TableKey
-		if entry.kind == 'list' then
-			resolvedKey = Tables.createListKey(listIndex)
-			listIndex += 1
-		elseif entry.kind == 'record' then
-			resolvedKey = Tables.createRecordKey(entry.key.text)
-		elseif entry.kind == 'general' then
-			local key: any = Tables.resolveKey(entry.key)
-			if key == nil then
-				State.report(state, `Error [line {entry.location.beginLine}]: Table keys must be constant numbers, booleans, or strings`)
-				continue
-			end
-			resolvedKey = key
-		else
-			State.report(state, `Error [line {entry.location.beginLine}]: Unsupported table entry kind '{entry.kind}'`)
-			continue
-		end
+		local resolvedKey, nextListIndex = resolveEntryKey(state, entry, listIndex, seenKeys)
+		if resolvedKey == nil then continue end
+		listIndex = nextListIndex
 
-		if seenKeys[resolvedKey.id] then
-			State.report(state, `Error [line {entry.location.beginLine}]: Duplicate table key '{resolvedKey.id}'`)
-			continue
-		end
-		seenKeys[resolvedKey.id] = true
-
-		local value = nil
+		local value
 		if entry.value.tag == 'table' then
 			value = {
 				kind = 'table',
@@ -94,6 +115,74 @@ local function buildTable(state: CodegenState, tableName: string, tableNode: Nod
 	end
 
 	return info
+end
+
+local function buildTableRhsPlan(state: CodegenState, tableNode: Node): { TablePlanEntry }
+	local entries: { TablePlanEntry } = {}
+	local seenKeys: { [string]: boolean } = {}
+	local listIndex = 1
+
+	for _, entry in tableNode.entries do
+		local resolvedKey, nextListIndex = resolveEntryKey(state, entry, listIndex, seenKeys)
+		if resolvedKey == nil then continue end
+		listIndex = nextListIndex
+
+		local value: TablePlanValue
+		if entry.value.tag == 'table' then
+			value = {
+				kind = 'table',
+				entries = buildTableRhsPlan(state, entry.value)
+			}
+		else
+			value = {
+				kind = 'scalar',
+				tempCell = Expr.emitExpr(state, entry.value)
+			}
+		end
+
+		table.insert(entries, {
+			key = resolvedKey,
+			value = value,
+			line = entry.location.beginLine
+		})
+	end
+
+	return entries
+end
+
+local function emitTableReassign(state: CodegenState, info: TableInfo, rhsEntries: { TablePlanEntry }, line: number)
+	local seen: { [string]: boolean } = {}
+
+	for _, rhs in rhsEntries do
+		seen[rhs.key.id] = true
+
+		local dstEntry = Tables.findEntry(info, rhs.key)
+		if dstEntry == nil then
+			State.report(state, `Error [line {rhs.line}]: Table reassignment introduces unsupported key '{rhs.key.id}'`)
+			continue
+		end
+
+		if dstEntry.value.kind == 'table' then
+			if rhs.value.kind ~= 'table' then
+				State.report(state, `Error [line {rhs.line}]: Table reassignment shape mismatch at key '{rhs.key.id}'`)
+				continue
+			end
+			emitTableReassign(state, dstEntry.value.tableInfo, rhs.value.entries, line)
+		else
+			if rhs.value.kind ~= 'scalar' then
+				State.report(state, `Error [line {rhs.line}]: Table reassignment shape mismatch at key '{rhs.key.id}'`)
+				continue
+			end
+			Primitives.emitZero(state, dstEntry.value.valueCell)
+			Primitives.emitMoveAdd(state, rhs.value.tempCell, dstEntry.value.valueCell)
+		end
+	end
+
+	for _, entry in info.entries do
+		if not seen[entry.key.id] then
+			State.report(state, `Error [line {line}]: Table reassignment is missing key '{entry.key.id}'`)
+		end
+	end
 end
 
 local function emitVarDecl(state: CodegenState, node: Node, _: EmitBlock)
@@ -121,7 +210,15 @@ end
 local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
 	local lhsExprs = unpack(node.variables)
 	local values = unpack(node.values)
-	local sourceCells = evaluateExprs(state, values)
+	local rhsPlans: { any } = {}
+
+	for i, valueNode in values do
+		if valueNode.tag == 'table' then
+			rhsPlans[i] = { kind = 'table', entries = buildTableRhsPlan(state, valueNode) }
+		else
+			rhsPlans[i] = { kind = 'scalar', cell = Expr.emitExpr(state, valueNode) }
+		end
+	end
 
 	local function assignToIndex(lhsNode: Node, sourceCell: number)
 		local normalizedNode = if lhsNode.tag == 'indexname' then Tables.lowerIndexName(lhsNode) else lhsNode
@@ -131,6 +228,7 @@ local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
 				State.report(state, `Error [line {lhsNode.location.beginLine}]: Cannot overwrite nested table with a scalar value`)
 				return
 			end
+			
 			Primitives.emitZero(state, constantEntry.value.valueCell)
 			Primitives.emitMoveAdd(state, sourceCell, constantEntry.value.valueCell)
 			return
@@ -156,27 +254,55 @@ local function emitAssign(state: CodegenState, node: Node, _: EmitBlock)
 
 	for index, lhs in lhsExprs do
 		local lhsNode = lhs :: Node
-		local sourceCell = sourceCells[index]
+		local rhs = rhsPlans[index]
 		if lhsNode.tag == 'local' then
 			local varName: string = lhsNode['local'].name.text
-			if state.tables[varName] ~= nil then
-				State.report(state, `Error [line {node.location.beginLine}]: Table reassignment is not supported`)
-				return
-			end
+			local tableInfo = state.tables[varName]
 			local cell = state.variables[varName]
-			if cell == nil then
-				State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
+
+			if tableInfo ~= nil then
+				if rhs == nil or rhs.kind ~= 'table' then
+					State.report(state, `Error [line {node.location.beginLine}]: Table variables can only be reassigned from a table literal`)
+					return
+				end
+
+				emitTableReassign(state, tableInfo, rhs.entries, node.location.beginLine)
+			else
+				if rhs ~= nil and rhs.kind == 'table' then
+					State.report(state, `Error [line {node.location.beginLine}]: Cannot assign a table literal to scalar variable '{varName}'`)
+					return
+				end
+
+				if cell == nil then
+					State.report(state, `Error [line {node.location.beginLine}]: Undefined variable '{varName}'`)
+					return
+				end
+				if rhs == nil then
+					State.report(state, `Error [line {node.location.beginLine}]: Missing assignment value`)
+					return
+				end
+
+				Primitives.emitZero(state, cell)
+				Primitives.emitMoveAdd(state, (rhs.cell :: number), cell)
+			end
+		elseif lhsNode.tag == 'index' or lhsNode.tag == 'indexname' then
+			if rhs == nil then
+				State.report(state, `Error [line {node.location.beginLine}]: Missing assignment value`)
 				return
 			end
-			Primitives.emitZero(state, cell)
-			Primitives.emitMoveAdd(state, sourceCell, cell)
-		elseif lhsNode.tag == 'index' or lhsNode.tag == 'indexname' then
-			assignToIndex(lhsNode, sourceCell)
+
+			if rhs.kind ~= 'scalar' then
+				State.report(state, `Error [line {node.location.beginLine}]: Cannot assign a table literal into an indexed table cell`)
+				return
+			end
+
+			assignToIndex(lhsNode, rhs.cell)
 		else
 			State.report(state, `Error [line {node.location.beginLine}]: Unsupported assignment target`)
 			return
 		end
 	end
+
 	Primitives.resetTemps(state)
 end
 
