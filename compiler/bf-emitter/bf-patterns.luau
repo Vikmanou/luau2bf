@@ -102,23 +102,38 @@ function Cells.emitMulVar(state: CodegenState, x: number, y: number, tmp0: numbe
 	put(state, tmp1, '-]')
 end
 
--- res = base ^ exp. Consumes nothing except temps.
+-- res = base ^ exp. Consumes exp.
 function Cells.emitPowVar(
 	state: CodegenState,
 	base: number,
 	exp: number,
 	res: number,
-	tmpExp: number,
-	tmpCopy: number,
-	tmpMul0: number,
-	tmpMul1: number
+	tmpPrevRes: number,
+	tmpRestoreBase: number
 )
 	Cells.emitSetCell(state, res, 1)
-	Cells.emitCopy(state, exp, tmpExp, tmpCopy)
-	put(state, tmpExp, '[')
-	Cells.emitMulVar(state, res, base, tmpMul0, tmpMul1)
-	put(state, tmpExp, '-]')
+
+	put(state, exp, '[')
+	-- Move res to tmpPrevRes
+	Cells.emitZero(state, tmpPrevRes)
+	put(state, res, '[')
+	put(state, tmpPrevRes, '+')
+	put(state, res, '-]')
+
+	-- res = tmpPrevRes * base
+	put(state, tmpPrevRes, '[')
+	put(state, base, '[')
+	put(state, res, '+')
+	put(state, tmpRestoreBase, '+')
+	put(state, base, '-]')
+	put(state, tmpRestoreBase, '[')
+	put(state, base, '+')
+	put(state, tmpRestoreBase, '-]')
+	put(state, tmpPrevRes, '-]')
+
+	put(state, exp, '-]')
 end
+
 
 function Cells.emitDivModVar(
 	state: CodegenState,
