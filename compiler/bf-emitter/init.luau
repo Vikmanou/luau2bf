@@ -20,6 +20,7 @@ return {
 	emitAddVar = BfPatterns.emitAddVar,
 	emitSubVar = BfPatterns.emitSubVar,
 	emitMulVar = BfPatterns.emitMulVar,
+	emitPowVar = BfPatterns.emitPowVar,
 	emitDivModVar = BfPatterns.emitDivModVar,
 	emitLessThanCells = BfPatterns.emitLessThanCells,
 	emitLessOrEqualCells = BfPatterns.emitLessOrEqualCells,

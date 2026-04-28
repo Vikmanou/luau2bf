@@ -18,6 +18,7 @@ function BinaryFold.tryNumber(node: Node): number?
 		elseif op == '/' and right ~= 0 then return left / right
 		elseif op == '//' and right ~= 0 then return math.floor(left / right)
 		elseif op == '%' and right ~= 0 then return left % right
+		elseif op == '^' then return math.pow(left, right)
 		end
 	end
 

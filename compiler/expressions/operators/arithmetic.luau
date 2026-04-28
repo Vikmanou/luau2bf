@@ -54,10 +54,28 @@ local function emitDivMod(state: CodegenState, node: Node, emitExpr: EmitExpr, i
 	return left
 end
 
+local function emitPow(state: CodegenState, node: Node, emitExpr: EmitExpr): number
+	local left = emitExpr(state, node.lhsOperand)
+	local right = emitExpr(state, node.rhsOperand)
+	Primitives.withTempFloor(state, state.nextTemp, function()
+		local res = Primitives.allocTemp(state)
+		local tmpExp = Primitives.allocTemp(state)
+		local tmpCopy = Primitives.allocTemp(state)
+		local tmpMul0 = Primitives.allocTemp(state)
+		local tmpMul1 = Primitives.allocTemp(state)
+		Primitives.emitPowVar(state, left, right, res, tmpExp, tmpCopy, tmpMul0, tmpMul1)
+		Primitives.emitZero(state, left)
+		Primitives.emitMoveAdd(state, res, left)
+	end)
+	state.nextTemp = right
+	return left
+end
+
 return {
 	['+'] = emitAdd,
 	['-'] = emitSub,
 	['*'] = emitMul,
 	['/'] = function(state, node, emitExpr) return emitDivMod(state, node, emitExpr, true) end,
 	['%'] = function(state, node, emitExpr) return emitDivMod(state, node, emitExpr, false) end,
+	['^'] = emitPow,
 }

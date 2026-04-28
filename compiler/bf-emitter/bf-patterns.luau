@@ -102,6 +102,24 @@ function Cells.emitMulVar(state: CodegenState, x: number, y: number, tmp0: numbe
 	put(state, tmp1, '-]')
 end
 
+-- res = base ^ exp. Consumes nothing except temps.
+function Cells.emitPowVar(
+	state: CodegenState,
+	base: number,
+	exp: number,
+	res: number,
+	tmpExp: number,
+	tmpCopy: number,
+	tmpMul0: number,
+	tmpMul1: number
+)
+	Cells.emitSetCell(state, res, 1)
+	Cells.emitCopy(state, exp, tmpExp, tmpCopy)
+	put(state, tmpExp, '[')
+	Cells.emitMulVar(state, res, base, tmpMul0, tmpMul1)
+	put(state, tmpExp, '-]')
+end
+
 function Cells.emitDivModVar(
 	state: CodegenState,
 	remainder: number,
