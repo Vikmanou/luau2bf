@@ -13,7 +13,7 @@ local REPEAT_FLAG = '__repeat_flag__'
 local function emitRepeatUntil(state: CodegenState, node: Node, emitBlock: EmitBlock)
 	local flag = Primitives.allocVar(state, REPEAT_FLAG)
 	Primitives.emitSetCell(state, flag, 1)
-	table.insert(state.breakStack, flag)
+	table.insert(state.breakStack, { kind = 'break', cell = flag })
 
 	Primitives.moveTo(state, flag)
 	Primitives.emit(state, '[')

@@ -35,7 +35,8 @@ end
 
 function emitBlock(state: CodegenState, stmts: { Node })
 	for _, stmt in stmts do
-		local brkCell = state.breakStack[#state.breakStack]
+		local frame = state.breakStack[#state.breakStack]
+		local brkCell: number? = if frame ~= nil then frame.cell else nil
 		if brkCell ~= nil then
 			local savedTemp = state.nextTemp
 			local tmpDst = Primitives.allocTemp(state)

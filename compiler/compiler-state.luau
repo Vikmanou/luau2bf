@@ -4,6 +4,18 @@ local Tables = require('./tables')
 
 type TableInfo = Tables.TableInfo
 
+export type FlowEntry = {
+	kind: string,        -- 'break' or 'return'
+	cell: number,        -- gate cell that emitBlock checks
+	resultCell: number?, -- only for 'return': where to store return value
+}
+
+export type FunctionDef = {
+	params: { string },
+	body: any,
+	line: number,
+}
+
 export type CodegenState = {
 	variables: { [string]: number },
 	tables: { [string]: TableInfo },
@@ -12,8 +24,10 @@ export type CodegenState = {
 	nextTemp: number,
 	pointer: number,
 	output: { string },
-	breakStack: { number },
+	breakStack: { FlowEntry },
 	diagnostics: { string },
+	functions: { [string]: FunctionDef },
+	callStack: { string },
 }
 
 local State = {}
@@ -29,6 +43,8 @@ function State.create(tempStart: number): CodegenState
 		output = {},
 		breakStack = {},
 		diagnostics = {},
+		functions = {},
+		callStack = {},
 	}
 end
 

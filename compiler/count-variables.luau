@@ -16,6 +16,12 @@ local function countVars(root: AstStatBlock): number
 			count += 2  -- loop variable + stop cell (step and brk are covered by the +4 buffer)
 		elseif node.tag == 'forin' then
 			count += #node.variables  -- k and optionally v (brkCell is within the +4 buffer)
+		elseif node.tag == 'localfunction' then
+			local func = node.func
+			if func ~= nil and func.parameters ~= nil then
+				count += #func.parameters
+			end
+			count += 1  -- running cell
 		elseif node.tag == 'call' then
 			local func = node.func
 			if func ~= nil

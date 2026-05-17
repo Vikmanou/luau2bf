@@ -16,7 +16,7 @@ local function emitWhile(state: CodegenState, node: Node, emitBlock: EmitBlock)
 	local brkName = `{BREAK_PREFIX}{line}{BREAK_SUFFIX}`
 	local brkCell = Primitives.allocVar(state, brkName)
 	Primitives.emitSetCell(state, brkCell, 1)
-	table.insert(state.breakStack, brkCell)
+	table.insert(state.breakStack, { kind = 'break', cell = brkCell })
 
 	local condCell = Expr.emitExpr(state, node.condition)
 	Primitives.moveTo(state, condCell)

@@ -8,12 +8,91 @@ type CodegenState = State.CodegenState
 type Node = { [string]: any }
 type EmitExpr = (state: CodegenState, node: Node) -> number
 
+local Statements: any
+local function getStatements()
+	if Statements == nil then
+		Statements = require('../../statements')
+	end
+	return Statements
+end
+
 local function unpackArgs(punctuated: { any }): { Node }
 	local args = {}
 	for _, pair in punctuated do
 		table.insert(args, pair.node)
 	end
 	return args
+end
+
+local function snapshotVars(state: CodegenState): ({ [string]: number }, { [string]: any })
+	local v: { [string]: number } = {}
+	for k, val in state.variables do v[k] = val end
+	local t: { [string]: any } = {}
+	for k, val in state.tables do t[k] = val end
+	return v, t
+end
+
+local function emitUserCall(state: CodegenState, fname: string, def: any, argNodes: { Node }, emitExpr: EmitExpr, line: number): number
+	for _, name in state.callStack do
+		if name == fname then
+			State.report(state, `Error [line {line}]: Recursive call to '{fname}' is not supported`)
+			return Primitives.allocTemp(state)
+		end
+	end
+
+	local params: { string } = def.params
+	local argCells: { number } = {}
+	for i = 1, #params do
+		argCells[i] = Primitives.allocTemp(state)
+		Primitives.emitSetCell(state, argCells[i], 0)
+	end
+
+	local savedNextTemp = state.nextTemp
+	for i = 1, #params do
+		local argNode = argNodes[i]
+		if argNode == nil then continue end
+		local srcCell = emitExpr(state, argNode)
+		Primitives.emitZero(state, argCells[i])
+		Primitives.emitMoveAdd(state, srcCell, argCells[i])
+		state.nextTemp = savedNextTemp
+	end
+
+	local resultCell = Primitives.allocTemp(state)
+	Primitives.emitSetCell(state, resultCell, 0)
+
+	local savedVars, savedTables = snapshotVars(state)
+	local savedNextVar = state.nextVarCell
+
+	local runningCell = Primitives.allocVar(state, `__run_{fname}__`)
+	Primitives.emitSetCell(state, runningCell, 1)
+
+	for i, paramName in params do
+		local paramCell = Primitives.allocVar(state, paramName)
+		Primitives.emitZero(state, paramCell)
+		Primitives.emitMoveAdd(state, argCells[i], paramCell)
+	end
+
+	table.insert(state.breakStack, {
+		kind = 'return',
+		cell = runningCell,
+		resultCell = resultCell,
+	})
+	table.insert(state.callStack, fname)
+
+	local floor = state.nextTemp
+	Primitives.withTempFloor(state, floor, function()
+		local stmtsMod = getStatements()
+		stmtsMod.emitBlock(state, (def.body :: Node).statements)
+	end)
+
+	table.remove(state.callStack)
+	table.remove(state.breakStack)
+
+	state.variables = savedVars
+	state.tables = savedTables
+	state.nextVarCell = savedNextVar
+
+	return resultCell
 end
 
 local function emitCall(state: CodegenState, node: Node, emitExpr: EmitExpr): number
@@ -32,6 +111,16 @@ local function emitCall(state: CodegenState, node: Node, emitExpr: EmitExpr): nu
 			local loc = node.location
 			State.report(state, `Error [line {if loc then tostring(loc.beginLine) else '?'}]: Unsupported built-in '{key}'`)
 			return Primitives.allocTemp(state)
+		end
+	end
+
+	if func.tag == 'local' then
+		local fname: string = func['local'].name.text
+		local def = state.functions[fname]
+		if def ~= nil then
+			local loc = node.location
+			local line = if loc then loc.beginLine else 0
+			return emitUserCall(state, fname, def, unpackArgs(node.arguments), emitExpr, line)
 		end
 	end
 

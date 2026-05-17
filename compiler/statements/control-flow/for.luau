@@ -49,7 +49,7 @@ local function emitNumericFor(state: CodegenState, node: Node, emitBlock: EmitBl
 	local stepCell = Primitives.allocVar(state, stepName)
 
 	Primitives.emitSetCell(state, brkCell, 1)
-	table.insert(state.breakStack, brkCell)
+	table.insert(state.breakStack, { kind = 'break', cell = brkCell })
 
 	local stepExpr = node.step or { tag = 'number', value = 1 }
 	local negativeStep = isNegativeStep(stepExpr)

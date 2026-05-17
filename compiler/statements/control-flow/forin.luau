@@ -93,7 +93,7 @@ local function emitForIn(state: CodegenState, node: Node, emitBlock: EmitBlock)
 	local vCell: number? = if vName ~= nil then Primitives.allocVar(state, vName) else nil
 
 	Primitives.emitSetCell(state, brkCell, 1)
-	table.insert(state.breakStack, brkCell)
+	table.insert(state.breakStack, { kind = 'break', cell = brkCell })
 
 	local entries = getEntries(info, ipairsMode)
 
