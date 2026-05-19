@@ -63,19 +63,30 @@ local function emitUserCall(state: CodegenState, fname: string, def: any, argNod
 	local savedVars, savedTables = snapshotVars(state)
 	local savedNextVar = state.nextVarCell
 
-	local runningCell = Primitives.allocVar(state, `__run_{fname}__`)
-	Primitives.emitSetCell(state, runningCell, 1)
+	local continueCell = Primitives.allocVar(state, `__cont_{fname}__`)
+	local gateCell = Primitives.allocVar(state, `__gate_{fname}__`)
+	Primitives.emitSetCell(state, continueCell, 1)
 
+	local paramCells: { number } = {}
 	for i, paramName in params do
 		local paramCell = Primitives.allocVar(state, paramName)
 		Primitives.emitZero(state, paramCell)
 		Primitives.emitMoveAdd(state, argCells[i], paramCell)
+		paramCells[i] = paramCell
 	end
+
+	Primitives.moveTo(state, continueCell)
+	Primitives.emit(state, '[')
+	Primitives.emitSetCell(state, continueCell, 0)
+	Primitives.emitSetCell(state, gateCell, 1)
 
 	table.insert(state.breakStack, {
 		kind = 'return',
-		cell = runningCell,
+		cell = gateCell,
 		resultCell = resultCell,
+		continueCell = continueCell,
+		funcName = fname,
+		paramCells = paramCells,
 	})
 	table.insert(state.callStack, fname)
 
@@ -87,6 +98,9 @@ local function emitUserCall(state: CodegenState, fname: string, def: any, argNod
 
 	table.remove(state.callStack)
 	table.remove(state.breakStack)
+
+	Primitives.moveTo(state, continueCell)
+	Primitives.emit(state, ']')
 
 	state.variables = savedVars
 	state.tables = savedTables

@@ -8,6 +8,9 @@ export type FlowEntry = {
 	kind: string,        -- 'break' or 'return'
 	cell: number,        -- gate cell that emitBlock checks
 	resultCell: number?, -- only for 'return': where to store return value
+	continueCell: number?, -- only for 'return': outer tail-call loop control
+	funcName: string?,   -- only for 'return': name of inlined function
+	paramCells: { number }?, -- only for 'return': param cells for tail-call reassignment
 }
 
 export type FunctionDef = {

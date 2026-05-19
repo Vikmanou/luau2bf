@@ -50,6 +50,7 @@ The resulting `.bf` file runs on any standard Brainfuck interpreter:
 - Logical operators: `and`, `or`, `not`
 - Boolean literals: `true`, `false`
 - Control flow: `if` / `elseif` / `else`, `while`, numeric `for`, `repeat...until`, `break`
+- User-defined functions (inlined at compile time) with parameters, single `return` value, and tail recursion
 - Output: `print(...)` — multiple arguments, tab-separated, followed by a newline
 - Length operator: `#` on string literals and tables
 - String literals as `print()` arguments and compile-time `..` concatenation
@@ -93,7 +94,7 @@ lute test
 
 - **Values are unsigned bytes.** All variables wrap silently at 255 / 0.
 - **Tables are compile-time.** Table structure must be known at compile time. No dynamic table creation or resizing.
-- **No user-defined functions.** Closures and `return` are not supported.
+- **Functions are inlined at compile time.** Only tail recursion is supported (recursive calls in `return f(...)` position). Non-tail recursion is rejected. Single return value only; no closures or first-class functions.
 - **Limited standard libraries.** Only a subset of `math` and `string` functions are available. All string operations require compile-time constant arguments.
 
 ## Why?
